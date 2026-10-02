@@ -1,0 +1,19 @@
+{
+  "name": "bolt",
+  "private": true,
+  "module": "main.ts",
+  "type": "module",
+  "packageManager": "bun@1.4.0",
+  "scripts": {
+    "dev": "bun --watch main.ts",
+    "start": "bun main.ts",
+    "typecheck": "tsc --noEmit",
+    "check": "bun run typecheck",
+    "build": "bun build ./main.ts --target=bun --production --sourcemap=linked --outdir=dist",
+    "compile": "bun build ./main.ts --compile --bytecode --minify --sourcemap --outfile=dist/bolt"
+  },
+  "devDependencies": {
+    "@types/bun": "1.4.2",
+    "typescript": "7.0.2"
+  }
+}

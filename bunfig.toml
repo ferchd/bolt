@@ -1,0 +1,10 @@
+# Keep package resolution explicit and reproducible. Missing dependencies fail
+# instead of being installed implicitly when the application starts.
+[install]
+auto = "disable"
+exact = true
+prefer = "offline"
+
+# Bun's shell keeps package scripts fast and portable across operating systems.
+[run]
+shell = "bun"
