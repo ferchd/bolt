@@ -15,7 +15,6 @@
     "verbatimModuleSyntax": true,
     "noEmit": true,
     "incremental": true,
-    "tsBuildInfoFile": "./node_modules/.cache/tsconfig.tsbuildinfo",
 
     // Best practices
     "strict": true,
@@ -30,6 +29,10 @@
     "noUnusedParameters": true,
     "noPropertyAccessFromIndexSignature": true
   },
-  "include": ["**/*.ts", "**/*.tsx"],
-  "exclude": ["dist", "node_modules"]
+  "include": [
+    "packages/*/src/**/*.ts",
+    "packages/*/tests/**/*.ts",
+    "examples/*/src/**/*.ts"
+  ],
+  "exclude": ["node_modules", "**/dist"]
 }

@@ -1,10 +1,24 @@
-# bolt
+# Bolt
 
-Runtime de TypeScript configurado para Bun.
+Framework para Bun y TypeScript, organizado como un monorepo de Bun.
 
 ## Requisitos
 
 - Bun 1.4.0
+
+## Estructura
+
+```text
+packages/
+└── kernel/       Ciclo de vida y arranque de una aplicación Bolt
+
+examples/
+└── empty/        Aplicación Bolt mínima, sin rutas
+```
+
+Los paquetes nuevos se crearán dentro de `packages/` solamente cuando exista
+una responsabilidad concreta que justifique separarlos. Por ahora todo el
+desarrollo del framework vive en `@bolt/kernel`.
 
 ## Desarrollo
 
@@ -14,36 +28,40 @@ Instala las dependencias exactas registradas en `bun.lock`:
 bun install --frozen-lockfile
 ```
 
-Ejecuta el proyecto con recarga automática:
+Arranca la aplicación vacía:
 
 ```bash
 bun run dev
 ```
 
-También puedes iniciarlo una sola vez o comprobar los tipos:
+Comprueba los tipos y ejecuta las pruebas de todos los workspaces:
 
 ```bash
-bun run start
-bun run typecheck
+bun run check
 ```
 
-## Producción
+Las dependencias internas entre paquetes usarán el protocolo `workspace:*`, de
+modo que Bun las enlace localmente durante el desarrollo y las convierta a una
+versión concreta al publicar.
 
-Genera un bundle optimizado para el runtime de Bun:
+## Primera aplicación
 
-```bash
-bun run build
+```ts
+import { BoltApplication } from "@bolt/kernel";
+
+const application = BoltApplication.create();
+
+await application.start();
+
+console.log("Bolt application started");
 ```
 
-Para reducir el tiempo de arranque, también puedes crear un ejecutable nativo
-con bytecode precompilado:
-
-```bash
-bun run compile
-```
+Una aplicación vacía no abre puertos ni presupone un transporte. El kernel solo
+administra su ciclo de vida y permite detenerla de forma segura con
+`await application.stop()`.
 
 La configuración se basa en la documentación oficial de
 [Bun](https://bun.com/docs), incluyendo las recomendaciones para
 [TypeScript](https://bun.com/docs/typescript),
 [`bunfig.toml`](https://bun.com/docs/runtime/bunfig) y
-[bundles ejecutables](https://bun.com/docs/bundler/executables).
+[workspaces](https://bun.com/docs/pm/workspaces).

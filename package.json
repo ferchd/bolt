@@ -1,16 +1,18 @@
 {
   "name": "bolt",
   "private": true,
-  "module": "main.ts",
   "type": "module",
   "packageManager": "bun@1.4.0",
+  "workspaces": [
+    "packages/*",
+    "examples/*"
+  ],
   "scripts": {
-    "dev": "bun --watch main.ts",
-    "start": "bun main.ts",
-    "typecheck": "tsc --noEmit",
-    "check": "bun run typecheck",
-    "build": "bun build ./main.ts --target=bun --production --sourcemap=linked --outdir=dist",
-    "compile": "bun build ./main.ts --compile --bytecode --minify --sourcemap --outfile=dist/bolt"
+    "dev": "bun run --filter @bolt/example-empty dev",
+    "start": "bun run --filter @bolt/example-empty start",
+    "typecheck": "bun run --workspaces --if-present typecheck",
+    "test": "bun run --workspaces --if-present test",
+    "check": "bun run typecheck && bun run test"
   },
   "devDependencies": {
     "@types/bun": "1.4.2",

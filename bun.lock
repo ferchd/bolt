@@ -9,8 +9,23 @@
         "typescript": "7.0.2",
       },
     },
+    "examples/empty": {
+      "name": "@bolt/example-empty",
+      "version": "0.0.0",
+      "dependencies": {
+        "@bolt/kernel": "workspace:*",
+      },
+    },
+    "packages/kernel": {
+      "name": "@bolt/kernel",
+      "version": "0.0.0",
+    },
   },
   "packages": {
+    "@bolt/example-empty": ["@bolt/example-empty@workspace:examples/empty"],
+
+    "@bolt/kernel": ["@bolt/kernel@workspace:packages/kernel"],
+
     "@types/bun": ["@types/bun@1.4.2", "", { "dependencies": { "bun-types": "1.4.2" } }, "sha512-GimotNn7+ZV0uVArItBbriZsR1oNf0+WTzPkdcFrzShI7k2norL0uzEaJT8T33dWr7O/c9ZDuAFQrctKCi72oQ=="],
 
     "@types/node": ["@types/node@26.6.4", "", { "dependencies": { "undici-types": "~8.9.0" } }, "sha512-ldVPDCzj7fsaGZrLB0NuHuTvJcsNasysBAqMolr/cgxrLd1xbqxIr3XJiPnHHJUCxj5sNF1vnRj9aWnrVh5Jcg=="],

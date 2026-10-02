@@ -4,6 +4,8 @@
 auto = "disable"
 exact = true
 prefer = "offline"
+linker = "isolated"
+globalStore = true
 
 # Bun's shell keeps package scripts fast and portable across operating systems.
 [run]
