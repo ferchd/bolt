@@ -170,7 +170,8 @@ console.log(`Bolt is running at ${application.url}`);
 No existe una segunda instancia `BoltServer`: la aplicación posee el servidor y
 expone su `url` y `port` después de arrancar. Los servicios adicionales
 registrados con `use()` conservan su ciclo de vida ordenado alrededor del
-servidor.
+servidor. Bolt también escucha `SIGINT` y `SIGTERM` para ejecutar un cierre
+ordenado; esto permite que `bun --watch` libere recursos antes de reiniciar.
 
 La configuración se basa en la documentación oficial de
 [Bun](https://bun.com/docs), incluyendo las recomendaciones para

@@ -55,6 +55,8 @@ y el proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
   sus transiciones sin iniciar o detener servicios más de una vez.
 - Los fallos durante el rollback de inicio conservan el error original junto
   con cualquier error producido durante la limpieza.
+- La aplicación ahora procesa `SIGINT` y `SIGTERM` con un cierre ordenado y
+  retira sus listeners al detenerse.
 - El repositorio ahora utiliza Bun Workspaces para organizar paquetes y
   ejemplos.
 - La instalación de dependencias usa enlaces aislados y el almacén global de

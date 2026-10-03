@@ -14,12 +14,14 @@ export interface ApplicationOptions {
   readonly logger?: Logger;
   readonly port?: number;
   readonly router?: Router;
+  readonly shutdownSignals?: false | readonly NodeJS.Signals[];
 }
 
 export class BoltApplication {
   readonly #options: ApplicationOptions;
   readonly #services: ApplicationService[] = [];
   #server?: Bun.Server<undefined>;
+  readonly #signalHandlers = new Map<NodeJS.Signals, () => void>();
   #startOperation?: Promise<this>;
   #state: ApplicationState = "stopped";
   #stopOperation?: Promise<void>;
@@ -134,6 +136,7 @@ export class BoltApplication {
         routes: compileBunRoutes((this.#options.router ?? router).compile()),
       });
       this.#state = "running";
+      this.registerShutdownSignals();
       this.logger.info("Application started", { url: this.url.href });
     } catch (error) {
       const rollbackErrors: unknown[] = [];
@@ -162,6 +165,7 @@ export class BoltApplication {
 
   private async stopApplication(): Promise<void> {
     const errors: unknown[] = [];
+    this.removeShutdownSignals();
 
     try {
       await this.stopServer();
@@ -206,6 +210,35 @@ export class BoltApplication {
     });
   }
 
+  private registerShutdownSignals(): void {
+    const signals = this.#options.shutdownSignals ?? DEFAULT_SHUTDOWN_SIGNALS;
+
+    if (signals === false) {
+      return;
+    }
+
+    for (const signal of new Set(signals)) {
+      const handler = () => {
+        this.logger.info("Shutdown signal received", { signal });
+        void this.stop().catch((error: unknown) => {
+          this.logger.error("Graceful shutdown failed", { error, signal });
+          process.exitCode = 1;
+        });
+      };
+
+      process.on(signal, handler);
+      this.#signalHandlers.set(signal, handler);
+    }
+  }
+
+  private removeShutdownSignals(): void {
+    for (const [signal, handler] of this.#signalHandlers) {
+      process.off(signal, handler);
+    }
+
+    this.#signalHandlers.clear();
+  }
+
   private getServer(): Bun.Server<undefined> {
     if (!this.#server) {
       throw new Error("Bolt has not been started");
@@ -241,6 +274,8 @@ export class BoltApplication {
     return errors;
   }
 }
+
+const DEFAULT_SHUTDOWN_SIGNALS = ["SIGINT", "SIGTERM"] as const;
 
 function isDevelopment(
   development: Bun.Serve.Development | undefined,

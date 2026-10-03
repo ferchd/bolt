@@ -148,6 +148,31 @@ describe("BoltApplication", () => {
       }),
     ]);
   });
+
+  test("registers and removes graceful shutdown handlers", async () => {
+    const listenersBefore = process.listenerCount("SIGTERM");
+    application = BoltApplication.create({ port: 0 });
+
+    await application.start();
+
+    expect(process.listenerCount("SIGTERM")).toBe(listenersBefore + 1);
+
+    await application.stop();
+
+    expect(process.listenerCount("SIGTERM")).toBe(listenersBefore);
+  });
+
+  test("allows automatic signal handling to be disabled", async () => {
+    const listenersBefore = process.listenerCount("SIGTERM");
+    application = BoltApplication.create({
+      port: 0,
+      shutdownSignals: false,
+    });
+
+    await application.start();
+
+    expect(process.listenerCount("SIGTERM")).toBe(listenersBefore);
+  });
 });
 
 function createService(name: string, calls: string[]): ApplicationService {
