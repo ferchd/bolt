@@ -5,7 +5,17 @@ Todos los cambios relevantes de Bolt se documentarán en este archivo.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/)
 y el proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
 
-## [0.1.1] - 2026-10-03
+## [0.1.2] - 2026-10-03
+
+### Corregido
+
+- La publicación desde workspaces usa configuración Bun explícita con la
+  credencial limitada al registry GitLab, validada mediante HTTP real.
+
+`0.1.2` es la primera distribución. Los tags previos conservan las validaciones
+y los intentos de publicación que no llegaron a subir paquetes.
+
+## [0.1.1] - 2026-10-03 (sin distribución)
 
 ### Corregido
 
@@ -14,8 +24,8 @@ y el proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
 - El scaffold genera dependencias de la versión instalada del CLI.
 
 El tag `v0.1.0` se conserva para auditoría; sus paquetes no se publicaron al
-detectarse una carrera de cancelación en la validación final. `0.1.1` es la
-primera distribución validada.
+detectarse una carrera de cancelación en la validación final. La publicación
+de `0.1.1` se detuvo por configuración de autenticación antes del primer paquete.
 
 ## [0.1.0] - 2026-10-03 (sin distribución)
 

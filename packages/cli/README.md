@@ -21,7 +21,7 @@ exports `database` and an empty `migrator` catalog; it does not run migrations a
 Projects without persistence can add Bolt's own packages explicitly:
 
 ```sh
-bun add --exact @bolt/database@0.1.1 @bolt/orm@0.1.1
+bun add --exact @bolt/database@0.1.2 @bolt/orm@0.1.2
 bolt make:entity Accounts/User
 bolt make:migration createUsers
 ```

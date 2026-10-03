@@ -1,4 +1,4 @@
-# Validación de Bolt 0.1.1
+# Validación de Bolt 0.1.2
 
 Registro de la implementación posterior a la [auditoría inicial](framework-readiness.md),
 realizada el 3 de octubre de 2026 con Bun 1.4.0 en Windows.
@@ -13,6 +13,10 @@ La ejecución final contra los seis motores y Floci aprobó 286 pruebas, con
 1334 assertions y cero fallos. Se omitió una prueba de DDL implícitamente
 confirmado porque ese comportamiento no corresponde a PostgreSQL. La
 comprobación TypeScript pasó en los 19 workspaces.
+
+Una prueba adicional de publicación en Windows y Linux comprueba la cabecera
+Bearer del comando Bun dentro de un workspace y la eliminación de su
+configuración temporal, sin escribir credenciales reales.
 
 | Proveedor | Evidencia |
 | --- | --- |
@@ -94,5 +98,5 @@ por cada paquete. CI ejecuta tipos, pruebas, instalación de tarballs, PostgreSQ
 MySQL, MariaDB y Floci. SQL Server y Oracle se validan con los drivers Windows;
 los jobs Linux no sustituyen esas pruebas. Antes de un despliegue se deben
 validar TLS, permisos, backups/restauración, límites y carga esperada en su
-infraestructura concreta. Bolt 0.1.1 permite construir la aplicación, pero aún
+infraestructura concreta. Bolt 0.1.2 permite construir la aplicación, pero aún
 no declara la estabilidad de una API 1.0 ni certifica cualquier despliegue.
