@@ -42,6 +42,13 @@
         "@bolt/validation": "workspace:*",
       },
     },
+    "packages/cli": {
+      "name": "@bolt/cli",
+      "version": "0.0.0",
+      "bin": {
+        "bolt": "./src/bin.ts",
+      },
+    },
     "packages/config": {
       "name": "@bolt/config",
       "version": "0.0.0",
@@ -84,6 +91,10 @@
         "@bolt/http": "workspace:*",
       },
     },
+    "packages/security": {
+      "name": "@bolt/security",
+      "version": "0.0.0",
+    },
     "packages/testing": {
       "name": "@bolt/testing",
       "version": "0.0.0",
@@ -100,6 +111,8 @@
     },
   },
   "packages": {
+    "@bolt/cli": ["@bolt/cli@workspace:packages/cli"],
+
     "@bolt/config": ["@bolt/config@workspace:packages/config"],
 
     "@bolt/container": ["@bolt/container@workspace:packages/container"],
@@ -119,6 +132,8 @@
     "@bolt/logger": ["@bolt/logger@workspace:packages/logger"],
 
     "@bolt/router": ["@bolt/router@workspace:packages/router"],
+
+    "@bolt/security": ["@bolt/security@workspace:packages/security"],
 
     "@bolt/testing": ["@bolt/testing@workspace:packages/testing"],
 
