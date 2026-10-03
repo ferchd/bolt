@@ -108,6 +108,17 @@ to preserve precision and timezone semantics; JavaScript `Date` input is bound
 as a UTC timestamp with its original millisecond precision. Applications must
 choose explicit timezone/temporal codecs when converting native timestamps.
 
+Oracle's native driver can describe unconstrained `NUMBER`/decimal `FLOAT` as
+`SQL_DOUBLE` and round the value before .NET can retrieve it, even as text.
+Those result columns fail with `OdbcError.code === "unsupported_numeric_precision"`
+for small and large values alike. Declare exact columns with `NUMBER(p,s)` and
+cast computed results to an appropriate explicit precision/scale, or select
+`TO_CHAR(value)` for exact text. `BINARY_FLOAT`/`BINARY_DOUBLE` retain their
+intentional floating representation. The worker does not repeat or rewrite
+application queries to recover already-rounded data. Temporal output conversions
+use session formats preserving the signed four-digit year, nine fractional
+digits and native timezone region/offset information.
+
 ## Verification
 
 `bun test ./tests` exercises the actual PowerShell subprocess protocol, a real

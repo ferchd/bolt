@@ -59,6 +59,11 @@ function Begin-Transaction {
 
 function Encode-Field($reader, [int]$index) {
     $kind = $reader.GetFieldType($index)
+    # Oracle can describe unconstrained NUMBER/FLOAT as SQL_DOUBLE and round
+    # in the native driver before GetString. Never return that as exact data.
+    if ($script:dialect -eq 'oracle' -and ($kind -eq [double] -or $kind -eq [single]) -and $reader.GetDataTypeName($index) -match '^(NUMBER|FLOAT)$') {
+        throw [System.NotSupportedException]::new('unsupported_numeric_precision')
+    }
     # Read decimals directly as driver text before IsDBNull/GetValue. GetDecimal
     # uses .NET Decimal (28 digits), while SQL decimal supports up to 38 digits.
     if ($kind -eq [decimal] -or $kind -eq [DateTime] -or $kind -eq [DateTimeOffset] -or $kind -eq [TimeSpan]) {
@@ -140,6 +145,7 @@ function Encode-Output($parameter, $wire) {
     switch ([string]$wire.outputType) {
         'binary' { return @{ type = 'binary'; value = [Convert]::ToBase64String([byte[]]$value) } }
         'number' { return @{ type = 'number'; value = ([double]$value).ToString('R', $script:invariant) } }
+        'date' { return @{ type = 'date'; value = ([string]$value).Trim() } }
         default { return @{ type = [string]$wire.outputType; value = [string]$value } }
     }
 }
@@ -176,6 +182,16 @@ try {
                     $maxResponseBytes = [int]$request.maxResponseBytes
                     $connection = New-Object System.Data.Odbc.OdbcConnection([string]$request.connectionString)
                     $connection.Open()
+                    if ($dialect -eq 'oracle') {
+                        # Output text conversion must retain century, fractional
+                        # seconds and timezone rather than NLS's two-digit year.
+                        $formatCommand = $connection.CreateCommand()
+                        try {
+                            $formatCommand.CommandText = 'ALTER SESSION SET NLS_DATE_FORMAT = ''SYYYY-MM-DD"T"HH24:MI:SS'' NLS_TIMESTAMP_FORMAT = ''SYYYY-MM-DD"T"HH24:MI:SS.FF9'' NLS_TIMESTAMP_TZ_FORMAT = ''SYYYY-MM-DD"T"HH24:MI:SS.FF9 TZR TZD'' NLS_NUMERIC_CHARACTERS = ''.,'''
+                            $formatCommand.CommandTimeout = $commandTimeout
+                            [void]$formatCommand.ExecuteNonQuery()
+                        } finally { $formatCommand.Dispose() }
+                    }
                     # A leaked connection string is never sent back to the parent.
                     $request = [PSCustomObject]@{ id = $request.id; operation = 'open' }
                     Send-Frame @{ id = $request.id; ok = $true }
@@ -267,6 +283,7 @@ try {
             $exception = $_.Exception
             while ($null -ne $exception.InnerException) { $exception = $exception.InnerException }
             $failure = @{ id = if ($null -ne $request) { $request.id } else { 0 }; ok = $false; code = 'provider_error'; fatal = ($null -eq $connection -or $connection.State -ne [System.Data.ConnectionState]::Open) }
+            if ($exception -is [System.NotSupportedException] -and $exception.Message -eq 'unsupported_numeric_precision') { $failure.code = 'unsupported_numeric_precision' }
             if ($exception -is [System.Data.Odbc.OdbcException] -and $exception.Errors.Count -gt 0) {
                 $failure.sqlState = $exception.Errors[0].SQLState
                 $failure.nativeCode = $exception.Errors[0].NativeError

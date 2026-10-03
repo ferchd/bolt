@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { SqlDatabase, SqlMigrator, sqlMigration } from "@bolt/database";
 import { codecs, defineEntity, OptimisticLockError, OrmSession, Repository } from "../../orm/src/index.ts";
-import { OdbcTransport } from "../src/index.ts";
+import { OdbcError, OdbcTransport } from "../src/index.ts";
 
 const sqlServerConnection = process.env["BOLT_TEST_SQLSERVER_ODBC_CONNECTION"];
 const oracleConnection = process.env["BOLT_TEST_ORACLE_ODBC_CONNECTION"];
@@ -86,7 +86,7 @@ describe.skipIf(!oracleConnection)("real Oracle original ODBC transport", () => 
     const ledger = `bolt_oracle_m_${suffix}`;
     const quoted = `"${table}"`;
     // Oracle serializable transactions cannot materialize deferred segments.
-    const migration = sqlMigration("001-users", [`CREATE TABLE ${quoted} ("id" NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, "name" NVARCHAR2(120) NOT NULL, "age" NUMBER(10,0) NOT NULL, "note" NVARCHAR2(120), "version" NUMBER(10,0) NOT NULL) SEGMENT CREATION IMMEDIATE`], { transactional: false });
+    const migration = sqlMigration("001-users", [`CREATE TABLE ${quoted} ("id" NUMBER(38,0) GENERATED ALWAYS AS IDENTITY PRIMARY KEY, "name" NVARCHAR2(120) NOT NULL, "age" NUMBER(10,0) NOT NULL, "note" NVARCHAR2(120), "version" NUMBER(10,0) NOT NULL) SEGMENT CREATION IMMEDIATE`], { transactional: false });
     await db.start();
     try {
       const exact = "12345678901234567890123456789012345678";
@@ -98,6 +98,16 @@ describe.skipIf(!oracleConnection)("real Oracle original ODBC transport", () => 
       expect(result.rows[0]!["date"]).toContain("01:02:03.123");
       const outputs = await db.executeWithOutput('BEGIN :p2 := :p1; END;', [exact], [{ type: "decimal", size: 128 }]);
       expect(outputs.output).toEqual([exact]);
+      // The native driver silently rounds unconstrained NUMBER, including when
+      // GetString is requested. Fail closed for large and small values alike.
+      for (const value of [exact, "1.25"]) {
+        const failure = await rejected(db.execute('SELECT CAST(:p1 AS NUMBER) AS "ambiguous" FROM dual', [value]));
+        expect(failure).toBeInstanceOf(OdbcError);
+        expect((failure as OdbcError).code).toBe("unsupported_numeric_precision");
+      }
+      expect((await db.execute('SELECT TO_CHAR(CAST(:p1 AS NUMBER)) AS "exact" FROM dual', [exact])).rows[0]!["exact"]).toBe(exact);
+      const typedOutputs = await db.executeWithOutput(`BEGIN :p1 := HEXTORAW('00FF'); :p2 := 1.25; :p3 := TO_TIMESTAMP('1999-01-01T01:02:03.123456789', 'YYYY-MM-DD"T"HH24:MI:SS.FF9'); :p4 := NULL; :p5 := TO_TIMESTAMP_TZ('1999-01-01T01:02:03.123456789 -04:00', 'YYYY-MM-DD"T"HH24:MI:SS.FF9 TZH:TZM'); END;`, [], [{ type: "binary", size: 16 }, { type: "number" }, { type: "date", size: 128 }, { type: "decimal", size: 128 }, { type: "date", size: 128 }]);
+      expect(typedOutputs.output).toEqual([new Uint8Array([0, 255]), 1.25, "1999-01-01T01:02:03.123456789", null, "1999-01-01T01:02:03.123456789 -04:00"]);
       const first = new SqlMigrator(db, [migration], { tableName: ledger });
       const second = new SqlMigrator(db, [migration], { tableName: ledger });
       expect((await Promise.all([first.migrate(), second.migrate()])).flat()).toEqual(["001-users"]);

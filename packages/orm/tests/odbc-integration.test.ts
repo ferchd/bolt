@@ -146,6 +146,7 @@ describe.skipIf(!oracleConnection)("real Oracle ORM generated keys", () => {
       expect(item.enabled).toBe(true);
       expect(item.note).toBeNull();
       expect(item.version).toBe(3);
+      expect(await repo.query().select(u => ({ total: count(), average: avg(u.version), sum: sum(u.version) })).single()).toEqual({ total: 1, average: 3, sum: 3 });
       expect(await repo.query().select(u => ({ version: u.version.plus(0), changed: u.version.gte(3), unknown: u.note.eq("x") })).single()).toEqual({ version: 3, changed: true, unknown: null });
       expect(await repo.query().where(u => u.enabled).count()).toBe(1);
       expect(await repo.query().where(() => value(false)).count()).toBe(0);

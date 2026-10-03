@@ -128,10 +128,16 @@ export class SqlCompiler {
   public expression(node: ExpressionNode): string {
     switch (node.kind) {
       case "column": return `${quoteIdentifier(node.alias, this.dialect)}.${quoteIdentifier(node.name, this.dialect)}`;
-      case "value": return this.bind((this.dialect === "mssql" || this.dialect === "oracle") && typeof node.value === "boolean" ? (node.value ? 1 : 0) : node.value);
+      case "value": {
+        const bound = this.bind((this.dialect === "mssql" || this.dialect === "oracle") && typeof node.value === "boolean" ? (node.value ? 1 : 0) : node.value);
+        if (this.dialect === "oracle" && typeof node.value === "boolean") return `CAST(${bound} AS NUMBER(1,0))`;
+        if (this.dialect === "oracle" && typeof node.value === "number") return `CAST(${bound} AS BINARY_DOUBLE)`;
+        return bound;
+      }
       case "binary": {
         if (!["=", "<>", ">", ">=", "<", "<=", "+", "-"].includes(node.operator)) throw new TypeError("Invalid SQL binary operator");
-        return `(${this.scalar(node.left)} ${node.operator} ${this.scalar(node.right)})`;
+        const result = `(${this.scalar(node.left)} ${node.operator} ${this.scalar(node.right)})`;
+        return this.dialect === "oracle" && (node.operator === "+" || node.operator === "-") ? `CAST(${result} AS BINARY_DOUBLE)` : result;
       }
       case "logical": {
         if (node.operator !== "AND" && node.operator !== "OR") throw new TypeError("Invalid SQL logical operator");
@@ -153,7 +159,10 @@ export class SqlCompiler {
         let operand = node.node ? this.scalar(node.node) : "*";
         // JS number aggregates use floating numeric semantics; SQL Server AVG(int) would otherwise truncate.
         if (this.dialect === "mssql" && (node.name === "AVG" || node.name === "SUM")) operand = `CAST(${operand} AS FLOAT)`;
-        return `${name}(${node.distinct ? "DISTINCT " : ""}${operand})`;
+        const result = `${name}(${node.distinct ? "DISTINCT " : ""}${operand})`;
+        if (this.dialect === "oracle" && node.name === "COUNT") return `CAST(${result} AS NUMBER(38,0))`;
+        if (this.dialect === "oracle" && (node.name === "SUM" || node.name === "AVG")) return `CAST(${result} AS BINARY_DOUBLE)`;
+        return result;
       }
       default: throw new TypeError("Invalid SQL expression node");
     }
@@ -162,7 +171,8 @@ export class SqlCompiler {
   public scalar(node: ExpressionNode): string {
     if ((this.dialect === "mssql" || this.dialect === "oracle") && isPredicate(node)) {
       // Compile twice so positional transports receive a binding for each occurrence. Preserve SQL UNKNOWN.
-      return `(CASE WHEN ${this.expression(node)} THEN 1 WHEN NOT ${this.expression(node)} THEN 0 ELSE NULL END)`;
+      const result = `(CASE WHEN ${this.expression(node)} THEN 1 WHEN NOT ${this.expression(node)} THEN 0 ELSE NULL END)`;
+      return this.dialect === "oracle" ? `CAST(${result} AS NUMBER(1,0))` : result;
     }
     return this.expression(node);
   }

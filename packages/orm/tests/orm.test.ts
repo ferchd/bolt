@@ -48,6 +48,9 @@ describe("deferred typed SQL queries", () => {
       expect(compiled.sql).toContain("CASE WHEN");
       expect(compiled.parameters).toEqual([30, 30]);
     }
+    const oracleAggregates = repo.query().select(u => ({ total: count(), average: avg(u.age), sum: sum(u.age), next: u.age.plus(1) })).compile("oracle");
+    expect(oracleAggregates.sql).toContain("CAST(COUNT(*) AS NUMBER(38,0))");
+    expect(oracleAggregates.sql).toContain("AS BINARY_DOUBLE");
   }));
   test("ordering, paging composition, cardinality and count of limited rows", async () => fixture(async (_db, repo) => {
     const query = repo.query().orderBy(u => u.age).thenBy(u => u.id).take(3).skip(1).take(1);

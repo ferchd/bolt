@@ -100,7 +100,8 @@ export class Query<T extends object, R = T, S = Fields<T>> {
     const alias = quoteIdentifier("bolt_count", this.executor.dialect);
     const tableAlias = quoteIdentifier("bolt_count_source", this.executor.dialect);
     const as = this.executor.dialect === "oracle" ? " " : " AS ";
-    const result = await this.executor.execute(`SELECT ${this.executor.dialect === "mssql" ? "COUNT_BIG" : "COUNT"}(*) AS ${alias} FROM (${compiled.sql})${as}${tableAlias}`, compiled.parameters);
+    const count = this.executor.dialect === "oracle" ? "CAST(COUNT(*) AS NUMBER(38,0))" : `${this.executor.dialect === "mssql" ? "COUNT_BIG" : "COUNT"}(*)`;
+    const result = await this.executor.execute(`SELECT ${count} AS ${alias} FROM (${compiled.sql})${as}${tableAlias}`, compiled.parameters);
     const row = result.rows[0];
     return checkedCount(row?.["bolt_count"] ?? row?.["BOLT_COUNT"]);
   }

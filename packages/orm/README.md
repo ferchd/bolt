@@ -52,6 +52,8 @@ Expressions include `eq`, `ne`, `gt`, `gte`, `lt`, `lte`, `in`, `isNull`, `isNot
 
 Comparisons of nullable fields produce `Expr<boolean | null>` because SQL UNKNOWN is preserved in projections; filters accept those predicates and include only true rows. Logical composition preserves that nullable type. Predicate projections use `CASE` on SQL Server and Oracle and decode to booleans. Direct filters such as `.where(u => u.enabled)`, boolean literals, and nullable boolean fields work with explicit boolean codecs, including joined scopes. Arithmetic projections decode SQL numeric strings to checked JavaScript numbers.
 
+Oracle counts declare `NUMBER(38,0)` and predicate values declare `NUMBER(1,0)`, so ODBC can read them without lossy unspecified precision. Arithmetic, numeric literals and `sum`/`avg` declare `BINARY_DOUBLE`, matching their JavaScript `number` contract. Exact persisted decimals and large integers retain their explicit database column types and codecs.
+
 ```ts
 const names = await repository.query()
   .join(posts, (u, p) => u.id.eq(p.userId))
