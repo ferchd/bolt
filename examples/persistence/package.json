@@ -1,0 +1,25 @@
+{
+  "name": "@bolt/example-persistence",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun --watch src/main.ts",
+    "start": "bun src/main.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "bun test ./tests"
+  },
+  "dependencies": {
+    "@bolt/config": "workspace:*",
+    "@bolt/container": "workspace:*",
+    "@bolt/database": "workspace:*",
+    "@bolt/http": "workspace:*",
+    "@bolt/kernel": "workspace:*",
+    "@bolt/orm": "workspace:*",
+    "@bolt/router": "workspace:*",
+    "@bolt/security": "workspace:*",
+    "@bolt/storage": "workspace:*",
+    "@bolt/testing": "workspace:*",
+    "@bolt/validation": "workspace:*",
+    "@bolt/auth": "workspace:*"
+  }
+}
