@@ -20,7 +20,9 @@ export class BoltApplication {
   readonly #options: ApplicationOptions;
   readonly #services: ApplicationService[] = [];
   #server?: Bun.Server<undefined>;
+  #startOperation?: Promise<this>;
   #state: ApplicationState = "stopped";
+  #stopOperation?: Promise<void>;
 
   public readonly logger: Logger;
 
@@ -64,16 +66,57 @@ export class BoltApplication {
     return this;
   }
 
-  public async start(): Promise<this> {
+  public start(): Promise<this> {
     if (this.#state === "running") {
-      return this;
+      return Promise.resolve(this);
     }
 
-    if (this.#state !== "stopped") {
-      throw new Error(`Cannot start Bolt while it is ${this.#state}`);
+    if (this.#state === "starting") {
+      return this.#startOperation ?? Promise.resolve(this);
+    }
+
+    if (this.#state === "stopping") {
+      return (this.#stopOperation ?? Promise.resolve()).then(() => this.start());
     }
 
     this.#state = "starting";
+    const operation = this.startApplication();
+    this.#startOperation = operation;
+    operation.then(
+      () => this.clearStartOperation(operation),
+      () => this.clearStartOperation(operation),
+    );
+
+    return operation;
+  }
+
+  public stop(): Promise<void> {
+    if (this.#state === "stopped") {
+      return Promise.resolve();
+    }
+
+    if (this.#state === "stopping") {
+      return this.#stopOperation ?? Promise.resolve();
+    }
+
+    if (this.#state === "starting") {
+      return (this.#startOperation ?? Promise.resolve(this)).then(() =>
+        this.stop(),
+      );
+    }
+
+    this.#state = "stopping";
+    const operation = this.stopApplication();
+    this.#stopOperation = operation;
+    operation.then(
+      () => this.clearStopOperation(operation),
+      () => this.clearStopOperation(operation),
+    );
+
+    return operation;
+  }
+
+  private async startApplication(): Promise<this> {
     const started: ApplicationService[] = [];
 
     try {
@@ -93,8 +136,15 @@ export class BoltApplication {
       this.#state = "running";
       this.logger.info("Application started", { url: this.url.href });
     } catch (error) {
-      await this.stopServer();
-      const rollbackErrors = await this.stopServices(started);
+      const rollbackErrors: unknown[] = [];
+
+      try {
+        await this.stopServer();
+      } catch (rollbackError) {
+        rollbackErrors.push(rollbackError);
+      }
+
+      rollbackErrors.push(...(await this.stopServices(started)));
       this.#state = "stopped";
 
       if (rollbackErrors.length > 0) {
@@ -110,16 +160,7 @@ export class BoltApplication {
     return this;
   }
 
-  public async stop(): Promise<void> {
-    if (this.#state === "stopped") {
-      return;
-    }
-
-    if (this.#state !== "running") {
-      throw new Error(`Cannot stop Bolt while it is ${this.#state}`);
-    }
-
-    this.#state = "stopping";
+  private async stopApplication(): Promise<void> {
     const errors: unknown[] = [];
 
     try {
@@ -136,6 +177,18 @@ export class BoltApplication {
     }
 
     this.logger.info("Application stopped");
+  }
+
+  private clearStartOperation(operation: Promise<this>): void {
+    if (this.#startOperation === operation) {
+      this.#startOperation = undefined;
+    }
+  }
+
+  private clearStopOperation(operation: Promise<void>): void {
+    if (this.#stopOperation === operation) {
+      this.#stopOperation = undefined;
+    }
   }
 
   private handleError(error: Error): Response {

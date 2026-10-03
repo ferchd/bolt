@@ -36,6 +36,42 @@ describe("BoltApplication", () => {
     expect(application.isRunning).toBe(true);
   });
 
+  test("shares concurrent lifecycle transitions", async () => {
+    application = BoltApplication.create({ port: 0 });
+    const calls: string[] = [];
+    application.use({
+      async start() {
+        calls.push("start");
+        await Bun.sleep(5);
+      },
+      async stop() {
+        calls.push("stop");
+        await Bun.sleep(5);
+      },
+    });
+
+    await Promise.all([application.start(), application.start()]);
+    await Promise.all([application.stop(), application.stop()]);
+
+    expect(calls).toEqual(["start", "stop"]);
+    expect(application.state).toBe("stopped");
+  });
+
+  test("queues stop while the application is starting", async () => {
+    application = BoltApplication.create({ port: 0 }).use({
+      async start() {
+        await Bun.sleep(5);
+      },
+    });
+
+    const starting = application.start();
+    const stopping = application.stop();
+
+    await Promise.all([starting, stopping]);
+
+    expect(application.state).toBe("stopped");
+  });
+
   test("stops safely more than once", async () => {
     application = BoltApplication.create({ port: 0 });
     await application.start();

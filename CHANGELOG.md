@@ -51,6 +51,10 @@ y el proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
 
 ### Cambiado
 
+- Las llamadas concurrentes a `start()` y `stop()` ahora comparten y ordenan
+  sus transiciones sin iniciar o detener servicios más de una vez.
+- Los fallos durante el rollback de inicio conservan el error original junto
+  con cualquier error producido durante la limpieza.
 - El repositorio ahora utiliza Bun Workspaces para organizar paquetes y
   ejemplos.
 - La instalación de dependencias usa enlaces aislados y el almacén global de
