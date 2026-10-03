@@ -38,12 +38,16 @@
       "name": "@bolt/kernel",
       "version": "0.0.0",
       "dependencies": {
+        "@bolt/http": "workspace:*",
         "@bolt/router": "workspace:*",
       },
     },
     "packages/router": {
       "name": "@bolt/router",
       "version": "0.0.0",
+      "dependencies": {
+        "@bolt/http": "workspace:*",
+      },
     },
   },
   "packages": {

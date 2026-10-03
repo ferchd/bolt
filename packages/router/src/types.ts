@@ -1,3 +1,5 @@
+import type { HttpContext, Next } from "@bolt/http";
+
 export type ControllerType = abstract new (...args: never[]) => object;
 
 export type LazyController = () => Promise<unknown>;
@@ -9,11 +11,20 @@ export type ControllerHandler = readonly [
   action: string,
 ];
 
-export type RouteCallback = (...args: never[]) => unknown;
+export type RouteCallback = (context: HttpContext) => unknown;
 
 export type RouteHandler = RouteCallback | ControllerHandler;
 
-export type RouteMiddleware = object | ((...args: never[]) => unknown);
+export type RouteMiddlewareCallback = (
+  context: HttpContext,
+  next: Next,
+) => unknown;
+
+export interface RouteMiddlewareObject {
+  handle(context: HttpContext, next: Next): unknown;
+}
+
+export type RouteMiddleware = RouteMiddlewareCallback | RouteMiddlewareObject;
 
 export type RouteMethod =
   | "DELETE"

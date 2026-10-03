@@ -13,6 +13,12 @@ y el proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
   booleanos y conjuntos de valores desde el entorno cargado por Bun.
 - Se añadieron valores por defecto, detección de variables obligatorias y
   errores de configuración que no exponen sus contenidos.
+- Se incorporó `@bolt/http` con un contexto tipado para parámetros, query
+  string, cookies, headers y cuerpos de petición.
+- Se añadió un contrato JSON para errores HTTP esperados e inesperados, con
+  ocultación de detalles internos fuera del entorno de desarrollo.
+- Los callbacks y middleware del router ahora reciben tipos concretos para el
+  contexto y la continuación de la cadena.
 - Se incorporó `@bolt/kernel` como primer paquete del framework.
 - Se añadió un ciclo de vida extensible con servicios que arrancan en orden, se
   detienen en orden inverso y se revierten cuando falla el inicio.

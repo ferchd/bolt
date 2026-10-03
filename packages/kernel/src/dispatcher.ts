@@ -1,3 +1,8 @@
+import {
+  HttpContext,
+  toResponse,
+  type Next,
+} from "@bolt/http";
 import type {
   CompiledRoute,
   ControllerHandler,
@@ -5,10 +10,10 @@ import type {
   ControllerType,
   RouteMethod,
   RouteMiddleware,
+  RouteMiddlewareCallback,
+  RouteMiddlewareObject,
   RouteTable,
 } from "@bolt/router";
-
-import type { HttpContext, Next } from "./http-context.ts";
 
 type BunRouteHandler = (request: Request) => Promise<Response>;
 
@@ -39,11 +44,10 @@ export function compileBunRoutes(routes: RouteTable): BunRouteTable {
 
 function createBunHandler(route: CompiledRoute): BunRouteHandler {
   return async (request) => {
-    const context: HttpContext = {
+    const context = new HttpContext(request, {
       params: getRequestParams(request),
-      request,
       route,
-    };
+    });
     const result = await runMiddleware(route.middleware, context, () =>
       invokeRouteHandler(route, context),
     );
@@ -82,20 +86,14 @@ async function runMiddleware(
 }
 
 function resolveMiddleware(middleware: RouteMiddleware): {
-  callback: Function;
-  receiver: object | undefined;
+  callback: RouteMiddlewareCallback;
+  receiver: RouteMiddlewareObject | undefined;
 } {
   if (typeof middleware === "function") {
     return { callback: middleware, receiver: undefined };
   }
 
-  const handle = Reflect.get(middleware, "handle");
-
-  if (typeof handle !== "function") {
-    throw new TypeError("Route middleware must be callable or expose handle()");
-  }
-
-  return { callback: handle, receiver: middleware };
+  return { callback: middleware.handle, receiver: middleware };
 }
 
 async function invokeRouteHandler(
@@ -164,20 +162,4 @@ function getRequestParams(request: Request): Readonly<Record<string, string>> {
   }
 
   return {};
-}
-
-function toResponse(value: unknown): Response {
-  if (value instanceof Response) {
-    return value;
-  }
-
-  if (value === undefined) {
-    return new Response(null, { status: 204 });
-  }
-
-  if (typeof value === "string" || value instanceof Blob) {
-    return new Response(value);
-  }
-
-  return Response.json(value);
 }

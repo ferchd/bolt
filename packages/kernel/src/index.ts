@@ -1,8 +1,15 @@
+export { abort, HttpContext, HttpError } from "@bolt/http";
+
+export type {
+  HttpContextOptions,
+  HttpErrorOptions,
+  Next,
+  RouteInfo,
+} from "@bolt/http";
+
 export { BoltApplication } from "./application.ts";
 
 export type { ApplicationOptions } from "./application.ts";
-
-export type { HttpContext, Next } from "./http-context.ts";
 
 export type {
   ApplicationService,

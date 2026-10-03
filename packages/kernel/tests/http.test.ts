@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { Router } from "@bolt/router";
 
 import {
+  abort,
   BoltApplication,
   type HttpContext,
   type Next,
@@ -38,13 +39,38 @@ describe("BoltApplication HTTP lifecycle", () => {
 
   test("exposes Bun route params through the HTTP context", async () => {
     const router = Router.create();
-    router.get("/users/:id", ({ params }: HttpContext) => params);
+    router.get("/users/:id", (context) => ({
+      draft: context.query.get("draft"),
+      id: context.params["id"],
+    }));
     application = createApplication(router);
 
     await application.start();
-    const response = await fetch(new URL("/users/42", application.url));
+    const response = await fetch(
+      new URL("/users/42?draft=true", application.url),
+    );
 
-    expect(await response.json()).toEqual({ id: "42" });
+    expect(await response.json()).toEqual({ draft: "true", id: "42" });
+  });
+
+  test("parses request bodies and applies cookie changes", async () => {
+    const router = Router.create();
+    router.post("/users", async (context) => {
+      const body = await context.json<{ name: string }>();
+      context.cookies.set("visited", "true");
+      return { name: body.name };
+    });
+    application = createApplication(router);
+
+    await application.start();
+    const response = await fetch(new URL("/users", application.url), {
+      body: JSON.stringify({ name: "Ada" }),
+      headers: { "content-type": "application/json" },
+      method: "POST",
+    });
+
+    expect(await response.json()).toEqual({ name: "Ada" });
+    expect(response.headers.get("set-cookie")).toContain("visited=true");
   });
 
   test("creates a controller instance for every request", async () => {
@@ -124,6 +150,38 @@ describe("BoltApplication HTTP lifecycle", () => {
 
     expect(response.status).toBe(404);
     expect(await response.text()).toBe("");
+  });
+
+  test("renders expected errors without leaking unexpected ones", async () => {
+    const router = Router.create();
+    router.get("/expected", () =>
+      abort(422, "Email is required", { code: "INVALID_INPUT" }),
+    );
+    router.get("/unexpected", () => {
+      throw new Error("database password leaked");
+    });
+    application = BoltApplication.create({
+      development: false,
+      hostname: "127.0.0.1",
+      port: 0,
+      router,
+    });
+
+    await application.start();
+    const expected = await fetch(new URL("/expected", application.url));
+    const unexpected = await fetch(new URL("/unexpected", application.url));
+
+    expect(expected.status).toBe(422);
+    expect(await expected.json()).toEqual({
+      error: { code: "INVALID_INPUT", message: "Email is required" },
+    });
+    expect(unexpected.status).toBe(500);
+    expect(await unexpected.json()).toEqual({
+      error: {
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Internal Server Error",
+      },
+    });
   });
 });
 

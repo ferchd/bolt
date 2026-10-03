@@ -1,3 +1,4 @@
+import { toErrorResponse } from "@bolt/http";
 import router, { type Router } from "@bolt/router";
 
 import { compileBunRoutes } from "./dispatcher.ts";
@@ -78,6 +79,10 @@ export class BoltApplication {
 
       this.#server = Bun.serve({
         development: this.#options.development,
+        error: (error) =>
+          toErrorResponse(error, {
+            development: isDevelopment(this.#options.development),
+          }),
         fetch: () => new Response(null, { status: 404 }),
         hostname: this.#options.hostname,
         port: this.#options.port,
@@ -162,4 +167,18 @@ export class BoltApplication {
 
     return errors;
   }
+}
+
+function isDevelopment(
+  development: Bun.Serve.Development | undefined,
+): boolean {
+  if (typeof development === "boolean") {
+    return development;
+  }
+
+  if (development !== undefined) {
+    return true;
+  }
+
+  return Bun.env.NODE_ENV !== "production";
 }

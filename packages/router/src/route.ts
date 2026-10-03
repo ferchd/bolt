@@ -36,5 +36,11 @@ export class Route {
 export function toMiddlewareArray(
   middleware: RouteMiddleware | readonly RouteMiddleware[],
 ): readonly RouteMiddleware[] {
-  return Array.isArray(middleware) ? middleware : [middleware];
+  return isMiddlewareArray(middleware) ? middleware : [middleware];
+}
+
+function isMiddlewareArray(
+  middleware: RouteMiddleware | readonly RouteMiddleware[],
+): middleware is readonly RouteMiddleware[] {
+  return Array.isArray(middleware);
 }

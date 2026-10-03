@@ -20,5 +20,7 @@ export type {
   RouteHandler,
   RouteMethod,
   RouteMiddleware,
+  RouteMiddlewareCallback,
+  RouteMiddlewareObject,
   RouteTable,
 } from "./types.ts";

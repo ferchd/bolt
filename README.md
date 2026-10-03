@@ -11,6 +11,7 @@ Framework para Bun y TypeScript, organizado como un monorepo de Bun.
 ```text
 packages/
 ├── config/       Acceso tipado a las variables de entorno
+├── http/         Contexto, respuestas y errores HTTP
 ├── kernel/       Aplicación, ciclo de vida e integración HTTP con Bun
 └── router/       Definición y compilación de rutas
 
@@ -104,6 +105,31 @@ realiza matching durante una petición ni depende del servidor; el kernel
 transforma esa tabla en las rutas nativas de Bun al iniciar la aplicación.
 
 Puedes ejecutar el ejemplo con `bun run example:routing`.
+
+## Contexto y errores HTTP
+
+Los handlers reciben un contexto inferido por TypeScript con acceso a la
+petición nativa, parámetros, query string, cookies y parsers de body:
+
+```ts
+import { abort } from "@bolt/kernel";
+import router from "@bolt/router";
+
+router.post("/accounts", async (context) => {
+  const input = await context.json<{ email?: string }>();
+
+  if (!input.email) {
+    abort(422, "Email is required", { code: "INVALID_INPUT" });
+  }
+
+  context.cookies.set("registered", "true");
+  return { email: input.email };
+});
+```
+
+Los errores esperados conservan su status y código. Los errores inesperados se
+convierten en una respuesta JSON `500`; fuera de desarrollo nunca incluyen el
+mensaje interno ni el stack trace.
 
 ## Servidor
 
