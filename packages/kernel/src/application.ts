@@ -122,6 +122,11 @@ export class BoltApplication {
     const started: ApplicationService[] = [];
 
     try {
+      const routes = compileBunRoutes(
+        (this.#options.router ?? router).compile(),
+      );
+      this.registerShutdownSignals();
+
       for (const service of this.#services) {
         await service.start?.(this);
         started.push(service);
@@ -133,13 +138,13 @@ export class BoltApplication {
         fetch: () => new Response(null, { status: 404 }),
         hostname: this.#options.hostname,
         port: this.#options.port,
-        routes: compileBunRoutes((this.#options.router ?? router).compile()),
+        routes,
       });
       this.#state = "running";
-      this.registerShutdownSignals();
       this.logger.info("Application started", { url: this.url.href });
     } catch (error) {
       const rollbackErrors: unknown[] = [];
+      this.removeShutdownSignals();
 
       try {
         await this.stopServer();

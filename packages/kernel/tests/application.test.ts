@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { Router } from "@bolt/router";
 
 import { BoltApplication, Logger } from "../src/index.ts";
 import type { ApplicationService } from "../src/index.ts";
@@ -116,6 +117,28 @@ describe("BoltApplication", () => {
     expect(application.state).toBe("stopped");
   });
 
+  test("validates routes before starting services", async () => {
+    const router = Router.create();
+    let serviceStarts = 0;
+    router.get("/duplicate", () => "first");
+    router.get("/duplicate", () => "second");
+    application = BoltApplication.create({
+      router,
+      shutdownSignals: false,
+    }).use({
+      start() {
+        serviceStarts += 1;
+      },
+    });
+
+    await expect(application.start()).rejects.toThrow(
+      "Duplicate route: GET /duplicate",
+    );
+
+    expect(serviceStarts).toBe(0);
+    expect(application.state).toBe("stopped");
+  });
+
   test("prevents registering services while running", async () => {
     application = BoltApplication.create({ port: 0 });
     await application.start();
@@ -162,6 +185,26 @@ describe("BoltApplication", () => {
     expect(process.listenerCount("SIGTERM")).toBe(listenersBefore);
   });
 
+  test("registers shutdown handlers while services are starting", async () => {
+    const listenersBefore = process.listenerCount("SIGTERM");
+    let releaseStart: () => void = () => undefined;
+    const startGate = new Promise<void>((resolve) => {
+      releaseStart = resolve;
+    });
+    application = BoltApplication.create({ port: 0 }).use({
+      start: () => startGate,
+    });
+
+    const starting = application.start();
+    await Bun.sleep(0);
+
+    expect(application.state).toBe("starting");
+    expect(process.listenerCount("SIGTERM")).toBe(listenersBefore + 1);
+
+    releaseStart();
+    await starting;
+  });
+
   test("allows automatic signal handling to be disabled", async () => {
     const listenersBefore = process.listenerCount("SIGTERM");
     application = BoltApplication.create({
@@ -171,6 +214,22 @@ describe("BoltApplication", () => {
 
     await application.start();
 
+    expect(process.listenerCount("SIGTERM")).toBe(listenersBefore);
+  });
+
+  test("removes shutdown handlers when startup logging fails", async () => {
+    const listenersBefore = process.listenerCount("SIGTERM");
+    const logger = Logger.create({
+      level: "info",
+      writer() {
+        throw new Error("log sink failed");
+      },
+    });
+    application = BoltApplication.create({ logger, port: 0 });
+
+    await expect(application.start()).rejects.toThrow("log sink failed");
+
+    expect(application.state).toBe("stopped");
     expect(process.listenerCount("SIGTERM")).toBe(listenersBefore);
   });
 });
