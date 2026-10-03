@@ -48,10 +48,11 @@ Arranca la aplicación HTTP de ejemplo:
 bun run dev
 ```
 
-Esto inicia la API de tareas en `http://localhost:3000`. La base de datos se
-crea automáticamente en `storage/tasks.sqlite`; `DATABASE_PATH`, `APP_NAME`,
-`PORT` y `LOG_LEVEL` permiten cambiar los defaults sin un archivo de
-configuración del framework.
+Esto inicia la API de tareas en `http://localhost:3000`. Al ejecutarla desde el
+workspace raíz, la base de datos se crea automáticamente en
+`examples/api/storage/tasks.sqlite`; `DATABASE_PATH`, `APP_NAME`, `PORT` y
+`LOG_LEVEL` permiten cambiar los defaults sin un archivo de configuración del
+framework.
 
 Comprueba los tipos y ejecuta las pruebas de todos los workspaces:
 
