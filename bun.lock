@@ -45,6 +45,10 @@
       "name": "@bolt/config",
       "version": "0.0.0",
     },
+    "packages/container": {
+      "name": "@bolt/container",
+      "version": "0.0.0",
+    },
     "packages/database": {
       "name": "@bolt/database",
       "version": "0.0.0",
@@ -93,6 +97,8 @@
   },
   "packages": {
     "@bolt/config": ["@bolt/config@workspace:packages/config"],
+
+    "@bolt/container": ["@bolt/container@workspace:packages/container"],
 
     "@bolt/database": ["@bolt/database@workspace:packages/database"],
 
