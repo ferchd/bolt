@@ -10,6 +10,7 @@
   "scripts": {
     "dev": "bun run --filter @bolt/example-empty dev",
     "start": "bun run --filter @bolt/example-empty start",
+    "example:routing": "bun run --filter @bolt/example-routing start",
     "typecheck": "bun run --workspaces --if-present typecheck",
     "test": "bun run --workspaces --if-present test",
     "check": "bun run typecheck && bun run test"

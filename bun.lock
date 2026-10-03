@@ -16,15 +16,30 @@
         "@bolt/kernel": "workspace:*",
       },
     },
+    "examples/routing": {
+      "name": "@bolt/example-routing",
+      "version": "0.0.0",
+      "dependencies": {
+        "@bolt/router": "workspace:*",
+      },
+    },
     "packages/kernel": {
       "name": "@bolt/kernel",
+      "version": "0.0.0",
+    },
+    "packages/router": {
+      "name": "@bolt/router",
       "version": "0.0.0",
     },
   },
   "packages": {
     "@bolt/example-empty": ["@bolt/example-empty@workspace:examples/empty"],
 
+    "@bolt/example-routing": ["@bolt/example-routing@workspace:examples/routing"],
+
     "@bolt/kernel": ["@bolt/kernel@workspace:packages/kernel"],
+
+    "@bolt/router": ["@bolt/router@workspace:packages/router"],
 
     "@types/bun": ["@types/bun@1.4.2", "", { "dependencies": { "bun-types": "1.4.2" } }, "sha512-GimotNn7+ZV0uVArItBbriZsR1oNf0+WTzPkdcFrzShI7k2norL0uzEaJT8T33dWr7O/c9ZDuAFQrctKCi72oQ=="],
 
