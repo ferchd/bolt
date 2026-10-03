@@ -1,0 +1,86 @@
+image: oven/bun:1.4.0
+
+stages:
+  - verify
+  - publish
+
+default:
+  before_script:
+    - bun install --frozen-lockfile --ignore-scripts
+
+verify:
+  stage: verify
+  script:
+    - bun run check
+    - bun run verify:packages
+    - bun run release:check
+
+sql_integration:
+  stage: verify
+  services:
+    - name: postgres:16.9
+      alias: postgres
+    - name: mysql:8.4.5
+      alias: mysql
+    - name: mariadb:11.4.5
+      alias: mariadb
+  variables:
+    POSTGRES_DB: bolt_test
+    POSTGRES_PASSWORD: bolt_ci_test_password
+    MYSQL_DATABASE: bolt_test
+    MYSQL_ROOT_PASSWORD: bolt_ci_test_password
+    MYSQL_ROOT_HOST: '%'
+    MARIADB_DATABASE: bolt_test
+    MARIADB_ROOT_PASSWORD: bolt_ci_test_password
+    MARIADB_ROOT_HOST: '%'
+    BOLT_POSTGRESQL_TEST_URL: postgres://postgres:bolt_ci_test_password@postgres:5432/bolt_test
+    BOLT_MYSQL_TEST_URL: mysql://root:bolt_ci_test_password@mysql:3306/bolt_test
+    BOLT_MARIADB_TEST_URL: mysql://root:bolt_ci_test_password@mariadb:3306/bolt_test
+    BOLT_MYSQL_TEST_ALLOW_PUBLIC_KEY_RETRIEVAL: '1'
+  script:
+    - bun scripts/wait-sql.ts
+    - bun test packages/database/tests packages/orm/tests packages/auth/tests
+
+s3_integration:
+  stage: verify
+  services:
+    - name: floci/floci@sha256:dc779ef1e308016ef7d7fe85871c78d124b968a464c7f7f3d0dd57f0b7d44140
+      alias: floci
+  variables:
+    FLOCI_SERVICES_S3_ENFORCE_AUTH: 'false'
+    FLOCI_STORAGE_MODE: memory
+    BOLT_S3_TEST_EMULATOR: floci
+    BOLT_S3_ENDPOINT: http://floci:4566
+    BOLT_S3_BUCKET: bolt-ci-integration
+    BOLT_S3_ACCESS_KEY_ID: bolt-test-access
+    BOLT_S3_SECRET_ACCESS_KEY: bolt-test-secret
+    BOLT_S3_REGION: us-east-1
+  script:
+    - bun scripts/wait-s3.ts
+    - bun test packages/storage/tests
+
+# The existing remote secret-detection job must be preserved when integrating this checkout.
+include:
+  - template: Security/SAST.gitlab-ci.yml
+  - template: Security/Secret-Detection.gitlab-ci.yml
+
+variables:
+  SECRET_DETECTION_ENABLED: 'true'
+
+sast:
+  stage: verify
+  before_script: []
+
+secret_detection:
+  stage: verify
+  before_script: []
+
+publish:
+  stage: publish
+  resource_group: bolt-release
+  rules:
+    - if: '$CI_PROJECT_PATH == "ferchd/bolt" && $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$/ && $CI_COMMIT_REF_PROTECTED == "true"'
+      when: manual
+    - when: never
+  script:
+    - bun run release:publish
