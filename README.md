@@ -1,11 +1,29 @@
 # Bolt
 
-Framework con baterías incluidas para Bun y TypeScript. El MVP ofrece una ruta
-directa desde `BoltApplication.create()` hasta una API HTTP persistente y
-probada, sin dependencias externas de runtime.
+Framework modular para Bun y TypeScript con persistencia SQL, ORM propio de
+sintaxis LINQ, autenticación, almacenamiento local/S3 y scaffolding configurable. Los paquetes
+de runtime usan solamente APIs de Bun, del sistema y otros paquetes Bolt;
+TypeScript y sus definiciones siguen siendo herramientas de desarrollo.
 
 Bolt adopta configuración progresiva: funciona con defaults útiles y permite
 reemplazarlos cuando la aplicación realmente lo necesita.
+
+| Capacidad | Implementación | Validación en este checkout |
+| --- | --- | --- |
+| SQLite | Bun nativo | CRUD, ORM, transacciones, migraciones y HTTP reales |
+| PostgreSQL 16.9 | Bun SQL nativo | Integración contra servidor real |
+| MySQL 8.4.5 / MariaDB 11.4.5 | Bun SQL nativo | Integración contra servidores reales |
+| SQL Server 2022 CU20 | ODBC propio | Integración real: parámetros, migraciones, transacciones y ORM |
+| Oracle Free 26ai 23.26.3 | ODBC propio y driver nativo Oracle | Instalación disponible; validación del servidor en curso |
+| Disco local | Adaptador propio | I/O, streaming, cancelación y publicación atómica reales |
+| S3 compatible | Transporte propio SigV4; Bun S3 para operaciones auxiliares | Floci 1.5.8 real: multipart, firmas, cancelación y limpieza |
+| Autenticación y permisos | Sesiones SQL, Argon2id y políticas explícitas | HTTP, CSRF, rotación, revocación y ledger en SQLite/PG/MySQL/MariaDB/SQL Server |
+
+Los requisitos y límites del transporte ODBC se explican en
+[su guía](packages/database-odbc/README.md). Que un dialecto compile no implica
+que todos los esquemas y versiones del servidor estén certificados.
+La [matriz de validación](docs/validation.md) distingue las pruebas reales de
+las garantías que debe comprobar cada despliegue.
 
 ## Requisitos
 
@@ -15,21 +33,26 @@ reemplazarlos cuando la aplicación realmente lo necesita.
 
 ```text
 packages/
+├── auth/         Autenticación por contraseña, sesiones SQL y políticas
 ├── cli/          Flujo de desarrollo, inspección y scaffolding
 ├── config/       Acceso tipado a las variables de entorno
 ├── container/    Inyección de dependencias y ciclo de vida de recursos
-├── database/     SQLite, transacciones y migraciones
+├── database/     SQLite, PostgreSQL, MySQL, MariaDB y migraciones SQL
+├── database-odbc/ Transporte propio ODBC para SQL Server y Oracle
 ├── http/         Contexto, respuestas y errores HTTP
 ├── kernel/       Aplicación, ciclo de vida e integración HTTP con Bun
 ├── logger/       Logs legibles o estructurados con contexto
+├── orm/          Consultas LINQ tipadas, entidades y unidad de trabajo
 ├── router/       Definición y compilación de rutas
 ├── security/     Cabeceras, CORS, límites, cookies, CSRF y passwords
+├── storage/      Discos locales y S3 compatibles
 ├── testing/      Cliente HTTP para pruebas de aplicaciones Bolt
 └── validation/   Esquemas pequeños para validar entradas
 
 examples/
 ├── api/          API CRUD vertical con SQLite y pruebas HTTP
 ├── empty/        Aplicación Bolt mínima, sin rutas
+├── persistence/  SQL, ORM, archivos versionados y pruebas HTTP
 └── routing/      Registro y resolución de una ruta
 ```
 
@@ -71,9 +94,18 @@ Comprueba además que los paquetes puedan consumirse fuera del monorepo:
 bun run verify:packages
 ```
 
-Este comando crea tarballs privados, los instala en un proyecto temporal,
-comprueba sus tipos y arranca una aplicación HTTP. No publica paquetes ni
-asigna una versión de release.
+Este comando empaqueta todos los paquetes, los instala en un consumidor externo,
+comprueba sus tipos y ejecuta HTTP, migraciones, ORM y almacenamiento local.
+No publica paquetes.
+
+Después de publicar, `bun run verify:registry` instala los 15 paquetes por nombre
+y versión desde GitLab, comprueba sus tipos y ejecuta el consumidor externo sin
+overrides. Requiere `BOLT_GITLAB_TOKEN` obtenido fuera del repositorio.
+
+`bun run verify:recovery` crea contenedores de prueba aislados para PostgreSQL,
+MySQL y MariaDB, interrumpe una transacción al detener cada servidor y comprueba
+rollback durable, recuperación del pool y nuevas escrituras. Requiere Docker;
+remueve únicamente los contenedores creados por la ejecución.
 
 Las dependencias internas entre paquetes usarán el protocolo `workspace:*`, de
 modo que Bun las enlace localmente durante el desarrollo y las convierta a una
@@ -122,14 +154,18 @@ bolt routes
 bolt migrate
 bolt migrate:status
 bolt make:controller admin/user
+bolt make:entity User
 bolt make:migration create_users
 bolt new my-app
 ```
 
-Los comandos de runtime delegan en Bun sin usar un shell intermedio. Los
-generadores validan sus rutas y nunca sobrescriben archivos. `routes` y los
-comandos de migración cargan `src/application.ts`, que debe exportar `router` y
-`database`; `migrate:status` abre SQLite sin aplicar cambios implícitos.
+El skeleton predeterminado no incluye persistencia ni rutas de demostración.
+`bolt.config.ts` define las rutas de entry, aplicación, entidades, controladores,
+migraciones y pruebas; también admite plantillas propias. Los generadores
+ofrecen `--path`, `--template` y `--dry-run`, y rechazan sobrescrituras y escapes.
+`new --database postgresql` añade persistencia opcional. Los comandos esperan
+las migraciones asíncronas antes de liberar conexiones. Consulta la
+[guía del CLI](packages/cli/README.md) para configuración y conexiones nombradas.
 
 ## Configuración
 
@@ -283,9 +319,12 @@ const application = BoltApplication.create({
 router.get("/users", [usersToken, "index"]);
 ```
 
-El contenedor admite valores, factories y clases, lifetimes singleton y
-transient, detecta ciclos y libera recursos en orden inverso. Los proveedores
-de aplicación separan `register`, `boot` y `shutdown`.
+El contenedor admite valores, factories y clases, lifetimes `singleton`,
+`scoped` y `transient`, detecta ciclos y libera recursos en orden inverso.
+Cada petición posee un scope aislado, conservado hasta terminar o cancelar
+el streaming de su respuesta. Un singleton no puede capturar servicios scoped.
+Los proveedores separan `register`, `boot` y `shutdown`; las rutas registradas
+en `boot` se incorporan antes de abrir el servidor.
 
 ## Logs
 
@@ -307,7 +346,41 @@ silencioso.
 
 ## Base de datos
 
-`@bolt/database` envuelve `bun:sqlite` sin ocultar sus statements ni
+`SqlDatabase` ofrece una API asíncrona común y transportes nativos para SQLite,
+PostgreSQL, MySQL y MariaDB. SQL Server y Oracle usan el transporte explícito
+de `@bolt/database-odbc`, con un driver ODBC instalado y un worker PowerShell
+propio; no requieren un paquete JS de terceros. Los pools son acotados, las
+transacciones reservan una conexión física y el cierre espera las operaciones.
+
+```ts
+import { SqlDatabase, SqlMigrator, sqlMigration } from "@bolt/database";
+
+const database = SqlDatabase.create({
+  dialect: "postgresql",
+  url: process.env["DATABASE_URL"],
+  maxConnections: 10,
+});
+await database.start();
+const migrator = new SqlMigrator(database, [sqlMigration("001_users", [
+  "CREATE TABLE users (id VARCHAR(36) PRIMARY KEY, name VARCHAR(120) NOT NULL)",
+])]);
+await migrator.migrate();
+await database.transaction(async tx => {
+  await tx.execute("INSERT INTO users (id, name) VALUES ($1, $2)", [crypto.randomUUID(), "Ana"]);
+});
+await database.close();
+```
+
+Los placeholders de `execute` corresponden al motor; el ORM los compila
+automáticamente. Dentro de una transacción se usa exclusivamente su executor.
+`SqlConnections` administra conexiones nombradas. `SqlMigrator` comprueba
+checksums SHA-256, registra fallos y detecta migraciones aplicadas ausentes;
+usa locks propios del motor. El DDL de MySQL/MariaDB/Oracle exige declarar
+`transactional: false`; Oracle usa un lock de sesión `SYS.DBMS_LOCK` y requiere
+su permiso de ejecución, o un lock alternativo configurado por el despliegue.
+El SQL de cada migración debe revisarse para su dialecto.
+
+La API anterior `Database` sigue envolviendo `bun:sqlite` sin ocultar sus statements ni
 transacciones. Activa claves foráneas, timeout de espera y WAL para archivos;
 en `NODE_ENV=test` usa memoria por defecto.
 
@@ -331,6 +404,36 @@ el orden inverso junto con la aplicación. Esto serializa el descubrimiento y
 la ejecución cuando arrancan varios procesos contra el mismo archivo. Usa
 `migrateOnStart: false` o `database.start({ migrate: false })` para inspeccionar
 el estado antes de aplicar cambios.
+
+## ORM y almacenamiento
+
+El [ORM propio](packages/orm/README.md) compila expresiones tipadas a SQL
+parametrizado. Incluye proyecciones, joins, agrupaciones, agregados, codecs,
+claves compuestas, relaciones por lotes, concurrencia optimista y una unidad
+de trabajo explícita por petición.
+
+```ts
+const page = await repository.query()
+  .where(user => user.name.startsWith("Ana"))
+  .orderBy(user => user.name)
+  .thenBy(user => user.id)
+  .select(user => ({ id: user.id, name: user.name }))
+  .take(20)
+  .toList();
+```
+
+[Storage](packages/storage/README.md) permite registrar discos intercambiables
+locales y S3 compatibles: lectura por stream, límites de tamaño, escritura
+local atómica, listados paginados, copia, multipart y URLs firmadas. Declara
+capacidades para rechazar operaciones que el proveedor no puede garantizar;
+las subidas usan un transporte propio con `AbortSignal` y limpieza multipart.
+Floci se prueba sin autenticación; una suite independiente verifica las firmas
+SigV4 de las peticiones reales y sus payloads.
+Otros proveedores se añaden implementando `StorageDisk`.
+
+El [ejemplo de persistencia](examples/persistence/README.md) integra migración,
+repositorios scoped, metadatos SQL y archivos versionados con compensación.
+Se ejecuta con `bun run example:persistence`.
 
 ## Seguridad
 
@@ -406,18 +509,28 @@ El kernel limita los cuerpos a 1 MiB por defecto, valida las opciones del
 servidor y permite configurar TLS, `reusePort`, IPv6 e idle timeout mediante
 `server`.
 
-## Alcance del MVP
+## Estado y distribución
 
-El MVP cubre aplicaciones HTTP, configuración tipada, logs, observabilidad,
-validación, DI, SQLite, migraciones concurrentes, CLI, seguridad base y pruebas
-de integración. SQLite es el único almacenamiento integrado, las migraciones
-no tienen `down`, el rate limiting no es distribuido y las sesiones firmadas
-no constituyen por sí solas un sistema completo de autenticación/autorización.
+La versión preparada es `0.1.0`, todavía sin publicar. El origen canónico y el
+registry de paquetes son [GitLab](https://gitlab.com/ferchd/bolt). El registry
+usa el protocolo npm en GitLab; no se publican paquetes en npmjs.org.
+[GitHub](https://github.com/ferchd/bolt) queda destinado a contribuciones y
+mirror. La configuración del mirror remoto y la sincronización de este checkout
+siguen siendo operaciones pendientes; véase [CONTRIBUTING.md](CONTRIBUTING.md).
 
-Los paquetes continúan privados y sin una versión de release asignada. El
-repositorio es consumible como workspace y su instalación mediante tarballs se
-valida con un consumidor externo reproducible, pero no se publica en un
-registry.
+El pipeline GitLab verifica tipos, pruebas, tarballs y motores SQL. El job de
+publicación es manual, requiere un tag protegido coincidente y valida que las
+dependencias de runtime sean exclusivamente propias. `bun run release:check`
+valida los metadatos localmente; no requiere credenciales. Los proyectos
+generados referencian un token de GitLab mediante una variable de entorno.
+
+MongoDB y DynamoDB quedan fuera de esta etapa. Las migraciones son forward-only;
+Oracle captura claves generadas mediante parámetros de salida. No hay traducción
+de lambdas JavaScript arbitrarias ni relaciones con carga perezosa. El rate limiting
+en memoria no es distribuido; el aprovisionamiento de usuarios, recuperación de
+contraseñas y políticas de dominio pertenecen a la aplicación. La base SQL y el disco
+no comparten una transacción distribuida. Las pruebas no sustituyen la
+validación operativa del despliegue y del proveedor concreto.
 
 La configuración se basa en la documentación oficial de
 [Bun](https://bun.com/docs), incluyendo las recomendaciones para

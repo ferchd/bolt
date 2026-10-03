@@ -9,6 +9,29 @@ y el proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
 
 ### Añadido
 
+- Se incorporó `@bolt/auth` con contraseñas Argon2id, sesiones SQL opacas,
+  rotación atómica, expiración, revocación y autorización por políticas.
+- La aplicación de persistencia incorpora CSRF, permisos, respuestas privadas,
+  pruebas concurrentes, recuperación tras reinicio y reconciliación de objetos.
+- Se validó S3 contra Floci 1.5.8 y se implementó transporte propio SigV4 con
+  cancelación y limpieza multipart; los fallos de limpieza se informan.
+- Se añadieron pruebas reales de caída, rollback y recuperación de los pools
+  PostgreSQL, MySQL y MariaDB.
+
+- Se añadió SQL asíncrono con pools, conexiones nombradas, transacciones
+  reservadas y migraciones con checksums para múltiples dialectos.
+- Se incorporó el transporte propio ODBC para SQL Server y Oracle, con
+  parámetros preparados y worker PowerShell, sin dependencias JS externas.
+- Se incorporó `@bolt/orm` con expresiones LINQ tipadas, SQL parametrizado,
+  joins, agregados, concurrencia optimista y unidad de trabajo explícita.
+- Se incorporó `@bolt/storage` con disco local, S3 compatible, streaming,
+  escritura local atómica, multipart y URLs firmadas.
+- Se añadió `examples/persistence` con metadata SQL, repositorios por petición
+  y actualización versionada de archivos.
+- Se añadió configuración de estructura y plantillas para el scaffold,
+  generación de entidades, vistas previas y conexiones de migración nombradas.
+- Se preparó `0.1.0` para GitLab Package Registry, con validación de metadatos,
+  pipeline de integración SQL y publicación manual mediante tags protegidos.
 - Se incorporó `@bolt/cli` con comandos de desarrollo, arranque, pruebas,
   listado de rutas, migración, estado de migraciones y generadores seguros de
   aplicaciones, controladores y migraciones.
@@ -89,12 +112,17 @@ y el proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
 
 ### Cambiado
 
+- El scaffold predeterminado ahora es mínimo y deja la persistencia como opción.
+- Los paquetes son publicables en GitLab y declaran versiones coherentes;
+  todavía no se ha publicado una release.
+- El contenedor admite scopes por petición, conservados durante streaming;
+  los singleton no pueden capturar recursos scoped.
 - Las migraciones adquieren una transacción `IMMEDIATE` antes de descubrir el
   trabajo pendiente para tolerar arranques concurrentes.
 - Las migraciones se aplican al arrancar por defecto y pueden desactivarse de
   forma persistente o para una apertura concreta.
 - Los paquetes declaran explícitamente exports de TypeScript para Bun, tipos,
-  contenido del tarball y runtime mínimo sin dejar de ser privados.
+  contenido del tarball y runtime mínimo.
 - El ejemplo API usa providers, controladores con DI, trazas por petición,
   seguridad y la CLI para sus flujos diarios.
 - El ejemplo API persistente es ahora el destino de `bun run dev` y
@@ -118,6 +146,9 @@ y el proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
 
 ### Corregido
 
+- Las rutas registradas en `boot` se incorporan antes de iniciar HTTP.
+- Las migraciones del CLI esperan operaciones asíncronas antes del cierre.
+- La creación de SQLite con un nombre relativo evita intentar recrear `.` en Windows.
 - Los callbacks asíncronos de grupos de rutas ahora se rechazan antes de que
   puedan registrar rutas fuera de su prefijo o middleware.
 - Las rutas estáticas ya no pueden heredar middleware que el servidor nativo

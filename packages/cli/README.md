@@ -106,8 +106,9 @@ export const migrator = new SqlMigrator(database, [createUsers]);
 ```
 
 MySQL, MariaDB and Oracle DDL requires the explicit third argument
-`{ transactional: false }`; Oracle migrations also require a configured cross-process
-lock. Register and test SQL appropriate for the selected dialect.
+`{ transactional: false }`; Oracle migrations require permission to execute
+`SYS.DBMS_LOCK`, or a configured alternative cross-process lock.
+Register and test SQL appropriate for the selected dialect.
 
 ```sh
 bolt migrate
