@@ -11,6 +11,8 @@ export type {
   DatabaseState,
   DatabaseTransaction,
   Migration,
+  MigrationState,
+  MigrationStatus,
 } from "./database.ts";
 
 export type {

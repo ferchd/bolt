@@ -1,4 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import { Database, type Migration } from "../src/index.ts";
 
@@ -125,6 +128,130 @@ describe("Database", () => {
       database.stop();
     }
   });
+
+  test("can inspect and explicitly apply migrations when startup migration is disabled", () => {
+    const database = Database.create({
+      filename: ":memory:",
+      migrateOnStart: false,
+      migrations: [
+        {
+          id: "001_create_users",
+          up(database) {
+            database.run("CREATE TABLE users (id INTEGER PRIMARY KEY)");
+          },
+        },
+      ],
+    });
+
+    try {
+      database.start();
+
+      expect(database.migrationStatus()).toEqual([
+        {
+          appliedAt: null,
+          id: "001_create_users",
+          state: "pending",
+        },
+      ]);
+      expect(database.migrate()).toEqual(["001_create_users"]);
+
+      const [status] = database.migrationStatus();
+
+      expect(status?.id).toBe("001_create_users");
+      expect(status?.state).toBe("applied");
+      expect(status?.appliedAt).toBeString();
+      expect(() => database.run("SELECT * FROM users")).not.toThrow();
+    } finally {
+      database.stop();
+    }
+  });
+
+  test("reports migration records missing from the current registry", () => {
+    const database = Database.create({
+      filename: ":memory:",
+      migrations: [{ id: "001_initial", up() {} }],
+    });
+
+    try {
+      database.start();
+      database.run(
+        "INSERT INTO __bolt_migrations (id) VALUES ('000_removed')",
+      );
+
+      expect(database.migrationStatus().map(({ id, state }) => ({ id, state })))
+        .toEqual([
+          { id: "001_initial", state: "applied" },
+          { id: "000_removed", state: "missing" },
+        ]);
+    } finally {
+      database.stop();
+    }
+  });
+
+  test(
+    "serializes migration discovery and execution across processes",
+    async () => {
+      const directory = mkdtempSync(join(tmpdir(), "bolt-database-"));
+      const filename = join(directory, "concurrent.sqlite");
+      const barrier = join(directory, "migration-ready");
+      const fixture = join(import.meta.dir, "fixtures", "migrate-concurrently.ts");
+
+      try {
+        const bootstrap = Database.create({ filename, wal: false });
+        bootstrap.start();
+        bootstrap.stop();
+
+        const processes = [
+          Bun.spawn([process.execPath, fixture, filename, barrier], {
+            stderr: "pipe",
+            stdout: "pipe",
+          }),
+          Bun.spawn([process.execPath, fixture, filename, barrier], {
+            stderr: "pipe",
+            stdout: "pipe",
+          }),
+        ];
+        const exitCodes = await Promise.all(
+          processes.map((process) => process.exited),
+        );
+        const errors = await Promise.all(
+          processes.map((process) => new Response(process.stderr).text()),
+        );
+
+        expect(exitCodes, errors.join("\n")).toEqual([0, 0]);
+
+        const database = Database.create({
+          filename,
+          migrateOnStart: false,
+          wal: false,
+        });
+
+        try {
+          database.start();
+
+          expect(
+            database
+              .query<{ count: number }, []>(
+                "SELECT COUNT(*) AS count FROM concurrent_proof",
+              )
+              .get(),
+          ).toEqual({ count: 1 });
+          expect(
+            database
+              .query<{ count: number }, []>(
+                "SELECT COUNT(*) AS count FROM __bolt_migrations WHERE id = '001_concurrent'",
+              )
+              .get(),
+          ).toEqual({ count: 1 });
+        } finally {
+          database.stop();
+        }
+      } finally {
+        rmSync(directory, { force: true, recursive: true });
+      }
+    },
+    10_000,
+  );
 
   test("rejects duplicate and malformed migration ids before connecting", () => {
     const migration: Migration = {

@@ -10,6 +10,14 @@ import {
 
 export type DatabaseState = "running" | "stopped";
 
+export type MigrationState = "applied" | "missing" | "pending";
+
+export interface MigrationStatus {
+  readonly appliedAt: string | null;
+  readonly id: string;
+  readonly state: MigrationState;
+}
+
 export interface Migration {
   readonly id: string;
   up(database: Database): void;
@@ -21,6 +29,7 @@ export interface DatabaseOptions {
   readonly filename?: string;
   readonly foreignKeys?: boolean;
   readonly migrations?: readonly Migration[];
+  readonly migrateOnStart?: boolean;
   readonly readonly?: boolean;
   readonly safeIntegers?: boolean;
   readonly strict?: boolean;
@@ -42,6 +51,7 @@ interface ResolvedDatabaseOptions {
   readonly create: boolean;
   readonly filename: string;
   readonly foreignKeys: boolean;
+  readonly migrateOnStart: boolean;
   readonly readonly: boolean;
   readonly safeIntegers: boolean;
   readonly strict: boolean;
@@ -91,31 +101,22 @@ export class Database {
     }
 
     const connection = this.getConnection();
-    connection.run(
-      `CREATE TABLE IF NOT EXISTS ${MIGRATIONS_TABLE} (
-        id TEXT PRIMARY KEY NOT NULL,
-        applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-      )`,
-    );
+    const apply = connection.transaction((): readonly string[] => {
+      createMigrationsTable(connection);
 
-    const applied = new Set(
-      connection
-        .query<{ id: string }, []>(`SELECT id FROM ${MIGRATIONS_TABLE}`)
-        .all()
-        .map(({ id }) => id),
-    );
-    const pending = this.orderedMigrations().filter(
-      (migration) => !applied.has(migration.id),
-    );
+      const applied = new Set(
+        connection
+          .query<{ id: string }, []>(`SELECT id FROM ${MIGRATIONS_TABLE}`)
+          .all()
+          .map(({ id }) => id),
+      );
+      const pending = this.orderedMigrations().filter(
+        (migration) => !applied.has(migration.id),
+      );
+      const record = connection.query<unknown, { id: string }>(
+        `INSERT INTO ${MIGRATIONS_TABLE} (id) VALUES ($id)`,
+      );
 
-    if (pending.length === 0) {
-      return [];
-    }
-
-    const record = connection.query<unknown, { id: string }>(
-      `INSERT INTO ${MIGRATIONS_TABLE} (id) VALUES ($id)`,
-    );
-    const apply = connection.transaction(() => {
       for (const migration of pending) {
         const result: unknown = migration.up(this);
 
@@ -128,11 +129,42 @@ export class Database {
 
         record.run({ id: migration.id });
       }
+
+      return Object.freeze(pending.map(({ id }) => id));
     });
 
-    apply.immediate();
+    return apply.immediate();
+  }
 
-    return Object.freeze(pending.map(({ id }) => id));
+  public migrationStatus(): readonly MigrationStatus[] {
+    const connection = this.getConnection();
+    const registered = this.orderedMigrations();
+    const applied = new Map<string, string>();
+
+    if (hasMigrationsTable(connection)) {
+      for (const row of connection
+        .query<{ applied_at: string; id: string }, []>(
+          `SELECT id, applied_at FROM ${MIGRATIONS_TABLE} ORDER BY id`,
+        )
+        .all()) {
+        applied.set(row.id, row.applied_at);
+      }
+    }
+
+    const status: MigrationStatus[] = registered.map(({ id }) => ({
+      appliedAt: applied.get(id) ?? null,
+      id,
+      state: applied.has(id) ? "applied" : "pending",
+    }));
+    const registeredIds = new Set(registered.map(({ id }) => id));
+
+    for (const [id, appliedAt] of applied) {
+      if (!registeredIds.has(id)) {
+        status.push({ appliedAt, id, state: "missing" });
+      }
+    }
+
+    return Object.freeze(status.map((entry) => Object.freeze(entry)));
   }
 
   public query<
@@ -194,7 +226,10 @@ export class Database {
 
     try {
       configureConnection(connection, this.#options);
-      this.migrate();
+
+      if (this.#options.migrateOnStart) {
+        this.migrate();
+      }
     } catch (error) {
       this.#connection = undefined;
       this.#state = "stopped";
@@ -264,6 +299,25 @@ function configureConnection(
   }
 }
 
+function createMigrationsTable(connection: SQLiteDatabase): void {
+  connection.run(
+    `CREATE TABLE IF NOT EXISTS ${MIGRATIONS_TABLE} (
+      id TEXT PRIMARY KEY NOT NULL,
+      applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`,
+  );
+}
+
+function hasMigrationsTable(connection: SQLiteDatabase): boolean {
+  return (
+    connection
+      .query<{ found: number }, { name: string }>(
+        "SELECT 1 AS found FROM sqlite_schema WHERE type = 'table' AND name = $name",
+      )
+      .get({ name: MIGRATIONS_TABLE }) !== null
+  );
+}
+
 function defaultFilename(): string {
   if (Bun.env.NODE_ENV === "test") {
     return ":memory:";
@@ -318,6 +372,7 @@ function resolveOptions(options: DatabaseOptions): ResolvedDatabaseOptions {
     create: options.create ?? !readonly,
     filename: options.filename ?? defaultFilename(),
     foreignKeys: options.foreignKeys ?? true,
+    migrateOnStart: options.migrateOnStart ?? true,
     readonly,
     safeIntegers: options.safeIntegers ?? false,
     strict: options.strict ?? true,
