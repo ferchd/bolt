@@ -21,9 +21,14 @@
       "name": "@bolt/example-routing",
       "version": "0.0.0",
       "dependencies": {
+        "@bolt/config": "workspace:*",
         "@bolt/kernel": "workspace:*",
         "@bolt/router": "workspace:*",
       },
+    },
+    "packages/config": {
+      "name": "@bolt/config",
+      "version": "0.0.0",
     },
     "packages/kernel": {
       "name": "@bolt/kernel",
@@ -38,6 +43,8 @@
     },
   },
   "packages": {
+    "@bolt/config": ["@bolt/config@workspace:packages/config"],
+
     "@bolt/example-empty": ["@bolt/example-empty@workspace:examples/empty"],
 
     "@bolt/example-routing": ["@bolt/example-routing@workspace:examples/routing"],

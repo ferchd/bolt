@@ -10,6 +10,7 @@ Framework para Bun y TypeScript, organizado como un monorepo de Bun.
 
 ```text
 packages/
+├── config/       Acceso tipado a las variables de entorno
 ├── kernel/       Aplicación, ciclo de vida e integración HTTP con Bun
 └── router/       Definición y compilación de rutas
 
@@ -45,6 +46,23 @@ bun run check
 Las dependencias internas entre paquetes usarán el protocolo `workspace:*`, de
 modo que Bun las enlace localmente durante el desarrollo y las convierta a una
 versión concreta al publicar.
+
+## Configuración
+
+Bun carga los archivos `.env` automáticamente. Bolt aprovecha ese comportamiento
+y añade conversiones tipadas sin introducir otro parser:
+
+```ts
+import env from "@bolt/config";
+
+const name = env.string("APP_NAME", "Bolt");
+const port = env.integer("PORT", 3000);
+const debug = env.boolean("APP_DEBUG", false);
+const level = env.oneOf("LOG_LEVEL", ["debug", "info", "warn"] as const);
+```
+
+Omitir el valor por defecto hace que la variable sea obligatoria. Los errores
+identifican la variable y la regla incumplida, pero nunca incluyen su contenido.
 
 ## Primera aplicación
 

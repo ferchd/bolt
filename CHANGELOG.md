@@ -9,6 +9,10 @@ y el proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
 
 ### Añadido
 
+- Se incorporó `@bolt/config` con lectura tipada de strings, números, enteros,
+  booleanos y conjuntos de valores desde el entorno cargado por Bun.
+- Se añadieron valores por defecto, detección de variables obligatorias y
+  errores de configuración que no exponen sus contenidos.
 - Se incorporó `@bolt/kernel` como primer paquete del framework.
 - Se añadió un ciclo de vida extensible con servicios que arrancan en orden, se
   detienen en orden inverso y se revierten cuando falla el inicio.

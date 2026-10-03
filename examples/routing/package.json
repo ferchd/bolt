@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
+    "@bolt/config": "workspace:*",
     "@bolt/kernel": "workspace:*",
     "@bolt/router": "workspace:*"
   }

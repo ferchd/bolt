@@ -1,7 +1,11 @@
+import env from "@bolt/config";
 import { BoltApplication } from "@bolt/kernel";
 import router from "@bolt/router";
 
-router.get("/", () => ({ hello: "world" }));
+router.get("/", () => ({
+  application: env.string("APP_NAME", "Bolt"),
+  hello: "world",
+}));
 
 router
   .group(() => {
