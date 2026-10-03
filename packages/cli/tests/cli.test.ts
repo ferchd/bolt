@@ -6,6 +6,7 @@ import { join, resolve } from "node:path";
 import { runCli, type CliIO, type ProcessRunner } from "../src/index.ts";
 
 const temporaryDirectories: string[] = [];
+const cliVersion = (JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version: string }).version;
 
 afterEach(() => {
   for (const directory of temporaryDirectories.splice(0)) {
@@ -243,7 +244,10 @@ describe("Bolt CLI", () => {
     ).not.toContain("database");
     expect(readFileSync(join(applicationRoot, "src", "application.ts"), "utf8")).not.toContain('router.get');
     const manifest = JSON.parse(readFileSync(join(applicationRoot, "package.json"), "utf8"));
-    expect(manifest.dependencies["@bolt/kernel"]).toBe("0.1.0");
+    for (const [name, version] of Object.entries(manifest.dependencies)) {
+      expect(name.startsWith("@bolt/")).toBe(true);
+      expect(version).toBe(cliVersion);
+    }
     expect(manifest.dependencies["@bolt/database"]).toBeUndefined();
     expect(readFileSync(join(applicationRoot, ".npmrc"), "utf8")).toContain("${BOLT_GITLAB_TOKEN}");
     expect(readFileSync(join(applicationRoot, "bunfig.toml"), "utf8")).toContain('auto = "disable"');
@@ -359,6 +363,10 @@ describe("Bolt CLI", () => {
     expect(existsSync(join(root, "custom-app/src"))).toBe(false);
     expect(await runCli({ argv: ["new", "sql", "--database", "sqlite", "--no-install"], cwd: root, io: context.io })).toBe(0);
     expect(readFileSync(join(root, "sql/src/application.ts"), "utf8")).toContain("new SqlMigrator(database, [])");
+    const sqlManifest = JSON.parse(readFileSync(join(root, "sql/package.json"), "utf8")) as { dependencies: Record<string, string> };
+    expect(sqlManifest.dependencies["@bolt/orm"]).toBe(cliVersion);
+    expect(sqlManifest.dependencies["@bolt/database"]).toBe(cliVersion);
+    for (const version of Object.values(sqlManifest.dependencies)) expect(version).toBe(cliVersion);
     expect(await runCli({ argv: ["new", "invalid", "--database", "oracle", "--no-install"], cwd: root, io: context.io })).toBe(1);
     expect(existsSync(join(root, "invalid"))).toBe(false);
   });

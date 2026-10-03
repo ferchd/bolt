@@ -5,6 +5,8 @@ import {
 import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { defaultPaths, type BoltProjectConfig } from "./config.ts";
 
+const boltVersion = installedCliVersion();
+
 interface FilePlan { readonly path: string; readonly source: string }
 export interface ScaffoldOptions {
   readonly config?: BoltProjectConfig;
@@ -195,14 +197,26 @@ function applicationPackage(name: string, database?: string): object {
       "migrate:status": "bolt migrate:status",
     },
     dependencies: {
-      "@bolt/cli": "0.1.0",
-      "@bolt/http": "0.1.0",
-      "@bolt/kernel": "0.1.0",
-      "@bolt/router": "0.1.0",
-      ...(database ? { "@bolt/database": "0.1.0", "@bolt/orm": "0.1.0" } : {}),
+      "@bolt/cli": boltVersion,
+      "@bolt/http": boltVersion,
+      "@bolt/kernel": boltVersion,
+      "@bolt/router": boltVersion,
+      ...(database ? { "@bolt/database": boltVersion, "@bolt/orm": boltVersion } : {}),
     },
     devDependencies: { "@types/bun": "1.4.2", typescript: "7.0.2" },
   };
+}
+
+function installedCliVersion(): string {
+  const manifest: unknown = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+  const version = typeof manifest === "object" && manifest !== null
+    ? (manifest as Record<string, unknown>)["version"]
+    : undefined;
+  const semver = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/;
+  if (typeof version !== "string" || !semver.test(version)) {
+    throw new TypeError("Installed @bolt/cli package must declare a valid SemVer version");
+  }
+  return version;
 }
 function applicationTsconfig(): object {
   return {

@@ -2,7 +2,7 @@
 
 Bolt's own Bun CLI creates a small application, then follows the developer's structure.
 The default skeleton contains a router and application, without a database or demo route.
-Packages use fixed `0.1.0` releases from the private GitLab registry; generated `.npmrc`
+Packages use the exact version of the installed CLI from the private GitLab registry; generated `.npmrc`
 references `BOLT_GITLAB_TOKEN` without embedding a credential. Bun's automatic runtime
 installation is disabled. Set the token before `bun install` when the release is available.
 
@@ -21,7 +21,7 @@ exports `database` and an empty `migrator` catalog; it does not run migrations a
 Projects without persistence can add Bolt's own packages explicitly:
 
 ```sh
-bun add --exact @bolt/database@0.1.0 @bolt/orm@0.1.0
+bun add --exact @bolt/database@0.1.1 @bolt/orm@0.1.1
 bolt make:entity Accounts/User
 bolt make:migration createUsers
 ```
