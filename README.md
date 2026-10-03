@@ -15,12 +15,15 @@ reemplazarlos cuando la aplicación realmente lo necesita.
 
 ```text
 packages/
+├── cli/          Flujo de desarrollo, inspección y scaffolding
 ├── config/       Acceso tipado a las variables de entorno
+├── container/    Inyección de dependencias y ciclo de vida de recursos
 ├── database/     SQLite, transacciones y migraciones
 ├── http/         Contexto, respuestas y errores HTTP
 ├── kernel/       Aplicación, ciclo de vida e integración HTTP con Bun
 ├── logger/       Logs legibles o estructurados con contexto
 ├── router/       Definición y compilación de rutas
+├── security/     Cabeceras, CORS, límites, cookies, CSRF y passwords
 ├── testing/      Cliente HTTP para pruebas de aplicaciones Bolt
 └── validation/   Esquemas pequeños para validar entradas
 
@@ -50,15 +53,27 @@ bun run dev
 
 Esto inicia la API de tareas en `http://localhost:3000`. Al ejecutarla desde el
 workspace raíz, la base de datos se crea automáticamente en
-`examples/api/storage/tasks.sqlite`; `DATABASE_PATH`, `APP_NAME`, `PORT` y
-`LOG_LEVEL` permiten cambiar los defaults sin un archivo de configuración del
-framework.
+`examples/api/storage/tasks.sqlite`; `DATABASE_PATH`,
+`DATABASE_MIGRATE_ON_START`, `APP_NAME`, `APP_KEY`, `DEMO_PASSWORD`,
+`COOKIE_SECURE`, `TRUST_PROXY`, `PORT` y `LOG_LEVEL` permiten cambiar los
+defaults sin un archivo de configuración del framework. Las credenciales y la
+clave incluidas por el ejemplo son exclusivamente para desarrollo.
 
 Comprueba los tipos y ejecuta las pruebas de todos los workspaces:
 
 ```bash
 bun run check
 ```
+
+Comprueba además que los paquetes puedan consumirse fuera del monorepo:
+
+```bash
+bun run verify:packages
+```
+
+Este comando crea tarballs privados, los instala en un proyecto temporal,
+comprueba sus tipos y arranca una aplicación HTTP. No publica paquetes ni
+asigna una versión de release.
 
 Las dependencias internas entre paquetes usarán el protocolo `workspace:*`, de
 modo que Bun las enlace localmente durante el desarrollo y las convierta a una
@@ -92,8 +107,29 @@ await application.start();
 ```
 
 El ejemplo real en `examples/api` añade CRUD, grupos y nombres de ruta,
-validación de body/query/params, errores estables, migraciones y pruebas HTTP.
-Se ejecuta con `bun run example:api`.
+validación de body/query/params, proveedores, seguridad, migraciones y pruebas
+HTTP. Se ejecuta con `bun run example:api`.
+
+## CLI
+
+`@bolt/cli` concentra las tareas habituales sin ocultar que Bun es el runtime:
+
+```bash
+bolt dev
+bolt start
+bolt test
+bolt routes
+bolt migrate
+bolt migrate:status
+bolt make:controller admin/user
+bolt make:migration create_users
+bolt new my-app
+```
+
+Los comandos de runtime delegan en Bun sin usar un shell intermedio. Los
+generadores validan sus rutas y nunca sobrescriben archivos. `routes` y los
+comandos de migración cargan `src/application.ts`, que debe exportar `router` y
+`database`; `migrate:status` abre SQLite sin aplicar cambios implícitos.
 
 ## Configuración
 
@@ -193,6 +229,12 @@ Los errores esperados conservan su status y código. Los errores inesperados se
 convierten en una respuesta JSON `500`; fuera de desarrollo nunca incluyen el
 mensaje interno ni el stack trace.
 
+Cada contexto incluye además `requestId`, `clientIp`, un logger hijo,
+`resolve(token)` para servicios y `timeout(seconds)`. El kernel propaga
+`x-request-id`, registra duración/status y permite hooks `onRequest`,
+`onResponse` y `onError`. Las cabeceras de proxy solo se confían cuando
+`requests.trustProxy` se habilita explícitamente.
+
 ## Validación
 
 Los esquemas son composables, infieren su tipo y se conectan directamente al
@@ -216,6 +258,34 @@ router.post("/accounts", async (context) => {
 También están disponibles `context.validate.query()` y
 `context.validate.params()`. Los errores se agregan con paths deterministas y
 se responden como `422 VALIDATION_ERROR`; JSON malformado produce `400`.
+
+El paquete incluye literales, enums, uniones, valores anulables, fechas, UUID,
+archivos, defaults, refinamientos, transformaciones y objetos parciales.
+
+## Contenedor y proveedores
+
+Los tokens mantienen la resolución tipada sin decoradores ni reflexión:
+
+```ts
+import { createToken, provideClass, provideValue } from "@bolt/container";
+
+const databaseToken = createToken<Database>("database");
+const usersToken = createToken<UsersController>("users controller");
+
+const application = BoltApplication.create({
+  router,
+  bindings: [
+    provideValue(databaseToken, database),
+    provideClass(usersToken, [databaseToken], UsersController),
+  ],
+});
+
+router.get("/users", [usersToken, "index"]);
+```
+
+El contenedor admite valores, factories y clases, lifetimes singleton y
+transient, detecta ciclos y libera recursos en orden inverso. Los proveedores
+de aplicación separan `register`, `boot` y `shutdown`.
 
 ## Logs
 
@@ -257,7 +327,34 @@ application.use(database);
 
 Las migraciones son síncronas, forward-only, se ordenan por ID y se aplican en
 una transacción `IMMEDIATE`. El servicio abre antes del servidor y se cierra en
-el orden inverso junto con la aplicación.
+el orden inverso junto con la aplicación. Esto serializa el descubrimiento y
+la ejecución cuando arrancan varios procesos contra el mismo archivo. Usa
+`migrateOnStart: false` o `database.start({ migrate: false })` para inspeccionar
+el estado antes de aplicar cambios.
+
+## Seguridad
+
+`@bolt/security` ofrece middleware y primitivas independientes del servidor:
+
+```ts
+import { cors, rateLimit, secureHeaders } from "@bolt/security";
+
+router
+  .group(() => {
+    router.get("/profile", profile);
+  })
+  .prefix("/api")
+  .use([
+    secureHeaders(),
+    cors({ origin: "https://app.example" }),
+    rateLimit({ limit: 100, windowMs: 60_000 }),
+  ]);
+```
+
+También incluye cookies HMAC con rotación de secretos, CSRF double-submit y
+hashing/verificación Argon2id mediante `Bun.password`. Los límites en memoria
+son adecuados para una sola instancia; una aplicación distribuida deberá
+reemplazar esa política por almacenamiento compartido.
 
 ## Pruebas
 
@@ -289,6 +386,10 @@ const application = BoltApplication.create({
   hostname: "127.0.0.1",
   port: 3000,
   router,
+  server: {
+    idleTimeout: 10,
+    maxRequestBodySize: 1_048_576,
+  },
 });
 
 await application.start();
@@ -301,19 +402,22 @@ expone su `url` y `port` después de arrancar. Los servicios adicionales
 registrados con `use()` conservan su ciclo de vida ordenado alrededor del
 servidor. Bolt también escucha `SIGINT` y `SIGTERM` para ejecutar un cierre
 ordenado; esto permite que `bun --watch` libere recursos antes de reiniciar.
+El kernel limita los cuerpos a 1 MiB por defecto, valida las opciones del
+servidor y permite configurar TLS, `reusePort`, IPv6 e idle timeout mediante
+`server`.
 
 ## Alcance del MVP
 
-El MVP cubre aplicaciones HTTP, configuración tipada, logs, validación,
-SQLite, migraciones y pruebas de integración. Aún no incluye CLI de
-scaffolding, contenedor de dependencias, ORM/query builder, autenticación ni
-sesiones. SQLite es el único almacenamiento integrado y las migraciones no
-tienen `down`.
+El MVP cubre aplicaciones HTTP, configuración tipada, logs, observabilidad,
+validación, DI, SQLite, migraciones concurrentes, CLI, seguridad base y pruebas
+de integración. SQLite es el único almacenamiento integrado, las migraciones
+no tienen `down`, el rate limiting no es distribuido y las sesiones firmadas
+no constituyen por sí solas un sistema completo de autenticación/autorización.
 
-Los paquetes continúan privados y en `0.0.0`: el repositorio es consumible como
-workspace, pero todavía no representa una beta publicable en un registry. Ese
-hito requerirá fijar la API pública, asignar una versión prerelease y validar
-una instalación desde un proyecto externo.
+Los paquetes continúan privados y sin una versión de release asignada. El
+repositorio es consumible como workspace y su instalación mediante tarballs se
+valida con un consumidor externo reproducible, pero no se publica en un
+registry.
 
 La configuración se basa en la documentación oficial de
 [Bun](https://bun.com/docs), incluyendo las recomendaciones para
@@ -321,4 +425,7 @@ La configuración se basa en la documentación oficial de
 [`bunfig.toml`](https://bun.com/docs/runtime/bunfig) y
 [workspaces](https://bun.com/docs/pm/workspaces), además de las APIs nativas de
 [SQLite](https://bun.com/docs/runtime/sqlite) y
-[`bun:test`](https://bun.com/docs/test).
+[`bun:test`](https://bun.com/docs/test),
+[`Bun.serve`](https://bun.com/docs/runtime/http/server),
+[`Bun.spawn`](https://bun.com/docs/runtime/child-process) y
+[`Bun.password`](https://bun.com/guides/util/hash-a-password).

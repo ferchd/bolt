@@ -9,6 +9,27 @@ y el proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
 
 ### Añadido
 
+- Se incorporó `@bolt/cli` con comandos de desarrollo, arranque, pruebas,
+  listado de rutas, migración, estado de migraciones y generadores seguros de
+  aplicaciones, controladores y migraciones.
+- Se incorporó `@bolt/container` con tokens tipados, providers de valor,
+  factory y clase, lifetimes, detección de ciclos y disposición inversa.
+- `BoltApplication` ahora acepta bindings y providers con fases `register`,
+  `boot` y `shutdown`; los controladores pueden resolverse por token.
+- Se incorporó `@bolt/security` con cabeceras seguras, CORS/preflight, rate
+  limiting acotado, cookies HMAC, CSRF double-submit y Argon2id.
+- El contexto HTTP ahora incluye request ID, IP del cliente, logger por
+  petición, resolución de servicios y control del timeout.
+- Se añadieron hooks de petición/respuesta/error, access logs con duración y
+  propagación configurable de `x-request-id`.
+- Se añadieron límites seguros del servidor para cuerpos e idle timeout, junto
+  con configuración de TLS, IPv6 y reutilización de puerto.
+- La validación ahora incluye literales, enums, uniones, nullables, fechas,
+  UUID, archivos, defaults, refinamientos, transformaciones y objetos parciales.
+- Se añadió estado de migraciones aplicadas, pendientes o ausentes y apertura
+  de la base sin migración automática para tooling.
+- Se añadió una prueba reproducible que empaqueta todos los workspaces, instala
+  sus tarballs en un consumidor externo, comprueba TypeScript y arranca Bolt.
 - Se incorporó `@bolt/database` sobre `bun:sqlite`, con ciclo de vida,
   statements tipados, transacciones, claves foráneas, busy timeout y WAL para
   bases de datos persistentes.
@@ -68,6 +89,14 @@ y el proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
 
 ### Cambiado
 
+- Las migraciones adquieren una transacción `IMMEDIATE` antes de descubrir el
+  trabajo pendiente para tolerar arranques concurrentes.
+- Las migraciones se aplican al arrancar por defecto y pueden desactivarse de
+  forma persistente o para una apertura concreta.
+- Los paquetes declaran explícitamente exports de TypeScript para Bun, tipos,
+  contenido del tarball y runtime mínimo sin dejar de ser privados.
+- El ejemplo API usa providers, controladores con DI, trazas por petición,
+  seguridad y la CLI para sus flujos diarios.
 - El ejemplo API persistente es ahora el destino de `bun run dev` y
   `bun run start`.
 - El kernel valida y compila las rutas antes de iniciar servicios, y registra
