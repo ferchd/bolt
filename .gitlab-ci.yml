@@ -15,15 +15,8 @@ verify:
     - bun run verify:packages
     - bun run release:check
 
-sql_integration:
+.sql_integration:
   stage: verify
-  services:
-    - name: postgres:16.9
-      alias: postgres
-    - name: mysql:8.4.5
-      alias: mysql
-    - name: mariadb:11.4.5
-      alias: mariadb
   variables:
     POSTGRES_DB: bolt_test
     POSTGRES_PASSWORD: bolt_ci_test_password
@@ -33,13 +26,34 @@ sql_integration:
     MARIADB_DATABASE: bolt_test
     MARIADB_ROOT_PASSWORD: bolt_ci_test_password
     MARIADB_ROOT_HOST: '%'
-    BOLT_POSTGRESQL_TEST_URL: postgres://postgres:bolt_ci_test_password@postgres:5432/bolt_test
-    BOLT_MYSQL_TEST_URL: mysql://root:bolt_ci_test_password@mysql:3306/bolt_test
-    BOLT_MARIADB_TEST_URL: mysql://root:bolt_ci_test_password@mariadb:3306/bolt_test
     BOLT_MYSQL_TEST_ALLOW_PUBLIC_KEY_RETRIEVAL: '1'
   script:
     - bun scripts/wait-sql.ts
     - bun test packages/database/tests packages/orm/tests packages/auth/tests
+
+postgresql_integration:
+  extends: .sql_integration
+  services:
+    - name: postgres:16.9
+      alias: bolt-sql
+  variables:
+    BOLT_POSTGRESQL_TEST_URL: postgres://postgres:bolt_ci_test_password@bolt-sql:5432/bolt_test
+
+mysql_integration:
+  extends: .sql_integration
+  services:
+    - name: mysql:8.4.5
+      alias: bolt-sql
+  variables:
+    BOLT_MYSQL_TEST_URL: mysql://root:bolt_ci_test_password@bolt-sql:3306/bolt_test
+
+mariadb_integration:
+  extends: .sql_integration
+  services:
+    - name: mariadb:11.4.5
+      alias: bolt-sql
+  variables:
+    BOLT_MARIADB_TEST_URL: mysql://root:bolt_ci_test_password@bolt-sql:3306/bolt_test
 
 s3_integration:
   stage: verify
