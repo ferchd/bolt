@@ -42,6 +42,10 @@
         "@bolt/router": "workspace:*",
       },
     },
+    "packages/logger": {
+      "name": "@bolt/logger",
+      "version": "0.0.0",
+    },
     "packages/router": {
       "name": "@bolt/router",
       "version": "0.0.0",
@@ -60,6 +64,8 @@
     "@bolt/http": ["@bolt/http@workspace:packages/http"],
 
     "@bolt/kernel": ["@bolt/kernel@workspace:packages/kernel"],
+
+    "@bolt/logger": ["@bolt/logger@workspace:packages/logger"],
 
     "@bolt/router": ["@bolt/router@workspace:packages/router"],
 
