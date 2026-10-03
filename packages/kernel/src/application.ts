@@ -1,8 +1,12 @@
-import { HttpError, toErrorResponse } from "@bolt/http";
+import {
+  HttpError,
+  toErrorResponse,
+  type HttpContext,
+} from "@bolt/http";
 import logger, { type Logger } from "@bolt/logger";
 import router, { type Router } from "@bolt/router";
 
-import { compileBunRoutes } from "./dispatcher.ts";
+import { compileBunDispatcher } from "./dispatcher.ts";
 import type {
   ApplicationService,
   ApplicationState,
@@ -11,11 +15,32 @@ import type {
 export interface ApplicationOptions {
   readonly development?: Bun.Serve.Development;
   readonly hostname?: string;
+  readonly hooks?: ApplicationHooks;
   readonly logger?: Logger;
   readonly port?: number;
+  readonly requests?: RequestOptions;
   readonly router?: Router;
   readonly server?: ServerOptions;
   readonly shutdownSignals?: false | readonly NodeJS.Signals[];
+}
+
+export interface ApplicationHooks {
+  readonly onError?: (
+    context: HttpContext,
+    error: unknown,
+  ) => void | PromiseLike<void>;
+  readonly onRequest?: (context: HttpContext) => void | PromiseLike<void>;
+  readonly onResponse?: (
+    context: HttpContext,
+    response: Response,
+    durationMs: number,
+  ) => void | PromiseLike<void>;
+}
+
+export interface RequestOptions {
+  readonly accessLog?: boolean;
+  readonly idHeader?: false | string;
+  readonly trustProxy?: boolean;
 }
 
 export interface ServerOptions {
@@ -38,6 +63,7 @@ export class BoltApplication {
   public readonly logger: Logger;
 
   private constructor(options: ApplicationOptions) {
+    validateRequestOptions(options.requests);
     validateServerOptions(options.server);
     this.#options = options;
     this.logger = options.logger ?? logger;
@@ -132,8 +158,14 @@ export class BoltApplication {
     const started: ApplicationService[] = [];
 
     try {
-      const routes = compileBunRoutes(
+      const dispatcher = compileBunDispatcher(
         (this.#options.router ?? router).compile(),
+        {
+          development: isDevelopment(this.#options.development),
+          hooks: this.#options.hooks,
+          logger: this.logger,
+          requests: this.#options.requests,
+        },
       );
       this.registerShutdownSignals();
 
@@ -145,7 +177,7 @@ export class BoltApplication {
       this.#server = Bun.serve({
         development: this.#options.development,
         error: (error) => this.handleError(error),
-        fetch: () => new Response(null, { status: 404 }),
+        fetch: dispatcher.fetch,
         hostname: this.#options.hostname,
         idleTimeout:
           this.#options.server?.idleTimeout ?? DEFAULT_IDLE_TIMEOUT,
@@ -155,7 +187,7 @@ export class BoltApplication {
           DEFAULT_MAX_REQUEST_BODY_SIZE,
         port: this.#options.port,
         reusePort: this.#options.server?.reusePort,
-        routes,
+        routes: dispatcher.routes,
         tls: this.#options.server?.tls as
           | Bun.TLSOptions
           | Bun.TLSOptions[]
@@ -304,6 +336,20 @@ export class BoltApplication {
 const DEFAULT_SHUTDOWN_SIGNALS = ["SIGINT", "SIGTERM"] as const;
 const DEFAULT_IDLE_TIMEOUT = 10;
 const DEFAULT_MAX_REQUEST_BODY_SIZE = 1024 * 1024;
+
+function validateRequestOptions(options: RequestOptions | undefined): void {
+  if (!options || options.idHeader === undefined || options.idHeader === false) {
+    return;
+  }
+
+  try {
+    new Headers({ [options.idHeader]: "request-id" });
+  } catch (error) {
+    throw new TypeError("Request idHeader must be a valid HTTP header name", {
+      cause: error,
+    });
+  }
+}
 
 function validateServerOptions(options: ServerOptions | undefined): void {
   if (!options) {

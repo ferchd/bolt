@@ -4,6 +4,8 @@ export { RequestValidator } from "./request-validator.ts";
 export { toErrorResponse, toResponse } from "./response.ts";
 
 export type {
+  HttpLogContext,
+  HttpLogger,
   HttpContextOptions,
   Next,
   RouteInfo,

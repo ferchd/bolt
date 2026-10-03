@@ -1,8 +1,12 @@
 import {
+  HttpError,
   HttpContext,
+  toErrorResponse,
   toResponse,
   type Next,
+  type RouteInfo,
 } from "@bolt/http";
+import type { Logger } from "@bolt/logger";
 import type {
   CompiledRoute,
   ControllerHandler,
@@ -15,7 +19,27 @@ import type {
   RouteTable,
 } from "@bolt/router";
 
-type BunRouteHandler = (request: Request) => Promise<Response>;
+import type {
+  ApplicationHooks,
+  RequestOptions,
+} from "./application.ts";
+
+type BunRouteHandler = (
+  request: Request,
+  server: Bun.Server<undefined>,
+) => Promise<Response>;
+
+interface DispatcherOptions {
+  readonly development: boolean;
+  readonly hooks?: ApplicationHooks;
+  readonly logger: Logger;
+  readonly requests?: RequestOptions;
+}
+
+interface BunDispatcher {
+  readonly fetch: BunRouteHandler;
+  readonly routes: BunRouteTable;
+}
 
 type BunRouteTable = Record<
   string,
@@ -23,7 +47,10 @@ type BunRouteTable = Record<
   | Partial<Record<RouteMethod, BunRouteHandler>>
 >;
 
-export function compileBunRoutes(routes: RouteTable): BunRouteTable {
+export function compileBunDispatcher(
+  routes: RouteTable,
+  options: DispatcherOptions,
+): BunDispatcher {
   const compiled: BunRouteTable = {};
 
   for (const [path, methods] of Object.entries(routes)) {
@@ -41,27 +68,170 @@ export function compileBunRoutes(routes: RouteTable): BunRouteTable {
 
       compiledMethods[method as RouteMethod] = createBunHandler(
         route as CompiledRoute,
+        options,
       );
     }
 
     compiled[path] = compiledMethods;
   }
 
-  return compiled;
+  return {
+    fetch: createFallbackHandler(options),
+    routes: compiled,
+  };
 }
 
-function createBunHandler(route: CompiledRoute): BunRouteHandler {
-  return async (request) => {
-    const context = new HttpContext(request, {
-      params: getRequestParams(request),
-      route,
-    });
-    const result = await runMiddleware(route.middleware, context, () =>
-      invokeRouteHandler(route, context),
+function createBunHandler(
+  route: CompiledRoute,
+  options: DispatcherOptions,
+): BunRouteHandler {
+  return async (request, server) => {
+    return handleRequest(request, server, route, options, (context) =>
+      runMiddleware(route.middleware, context, () =>
+        invokeRouteHandler(route, context),
+      ),
     );
-
-    return toResponse(result);
   };
+}
+
+function createFallbackHandler(
+  options: DispatcherOptions,
+): BunRouteHandler {
+  return async (request, server) =>
+    handleRequest(
+      request,
+      server,
+      { method: request.method, path: "*" },
+      options,
+      () => new Response(null, { status: 404 }),
+    );
+}
+
+async function handleRequest(
+  request: Request,
+  server: Bun.Server<undefined>,
+  route: RouteInfo,
+  options: DispatcherOptions,
+  execute: (context: HttpContext) => unknown,
+): Promise<Response> {
+  const startedAt = performance.now();
+  const idHeader = options.requests?.idHeader ?? "x-request-id";
+  const requestId = resolveRequestId(request, idHeader);
+  const logger = options.logger.child({ requestId });
+  const context = new HttpContext(request, {
+    clientIp: resolveClientIp(
+      request,
+      server,
+      options.requests?.trustProxy ?? false,
+    ),
+    logger,
+    params: getRequestParams(request),
+    requestId,
+    route,
+    timeout: (seconds) => server.timeout(request, seconds),
+  });
+  let response: Response;
+
+  try {
+    await options.hooks?.onRequest?.(context);
+    const result = await execute(context);
+    response = toResponse(result);
+  } catch (error) {
+    await options.hooks?.onError?.(context, error);
+    logRequestError(logger, error, route);
+    response = toErrorResponse(error, {
+      development: options.development,
+    });
+  }
+
+  response = attachRequestId(response, idHeader, requestId);
+  const durationMs = performance.now() - startedAt;
+  await options.hooks?.onResponse?.(context, response, durationMs);
+
+  if (options.requests?.accessLog ?? true) {
+    logger.info("Request completed", {
+      clientIp: context.clientIp,
+      durationMs: Number(durationMs.toFixed(3)),
+      method: request.method,
+      route: route.name ?? route.path,
+      status: response.status,
+    });
+  }
+
+  return response;
+}
+
+function attachRequestId(
+  response: Response,
+  header: false | string,
+  requestId: string,
+): Response {
+  if (header === false || response.headers.has(header)) {
+    return response;
+  }
+
+  const headers = new Headers(response.headers);
+  headers.set(header, requestId);
+
+  return new Response(response.body, {
+    headers,
+    status: response.status,
+    statusText: response.statusText,
+  });
+}
+
+function logRequestError(
+  logger: Logger,
+  error: unknown,
+  route: RouteInfo,
+): void {
+  if (error instanceof HttpError) {
+    logger.warn("Request rejected", {
+      code: error.code,
+      route: route.name ?? route.path,
+      status: error.status,
+    });
+    return;
+  }
+
+  logger.error("Unhandled request error", {
+    error,
+    route: route.name ?? route.path,
+  });
+}
+
+function resolveClientIp(
+  request: Request,
+  server: Bun.Server<undefined>,
+  trustProxy: boolean,
+): string | null {
+  if (trustProxy) {
+    const forwarded = request.headers
+      .get("x-forwarded-for")
+      ?.split(",", 1)[0]
+      ?.trim();
+
+    if (forwarded) {
+      return forwarded;
+    }
+  }
+
+  return server.requestIP(request)?.address ?? null;
+}
+
+function resolveRequestId(
+  request: Request,
+  header: false | string,
+): string {
+  if (header !== false) {
+    const provided = request.headers.get(header);
+
+    if (provided && /^[a-zA-Z0-9._:-]{1,128}$/.test(provided)) {
+      return provided;
+    }
+  }
+
+  return crypto.randomUUID();
 }
 
 async function runMiddleware(

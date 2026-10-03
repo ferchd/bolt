@@ -4,6 +4,7 @@ import { Router } from "@bolt/router";
 import {
   abort,
   BoltApplication,
+  Logger,
   type HttpContext,
   type Next,
 } from "../src/index.ts";
@@ -149,6 +150,9 @@ describe("BoltApplication HTTP lifecycle", () => {
     const response = await fetch(new URL("/missing", application.url));
 
     expect(response.status).toBe(404);
+    expect(response.headers.get("x-request-id")).toMatch(
+      /^[0-9a-f-]{36}$/,
+    );
     expect(await response.text()).toBe("");
   });
 
@@ -202,6 +206,68 @@ describe("BoltApplication HTTP lifecycle", () => {
     });
 
     expect(response.status).toBe(413);
+  });
+
+  test("adds request observability and honors trusted proxy metadata", async () => {
+    const router = Router.create();
+    const events: string[] = [];
+    const records: Array<Record<string, unknown>> = [];
+    const logger = Logger.create({
+      format: "json",
+      level: "info",
+      writer: (line) => records.push(JSON.parse(line)),
+    });
+    router.get("/trace", (context) => {
+      context.timeout(5);
+      context.logger.info("Inside handler");
+      return {
+        clientIp: context.clientIp,
+        requestId: context.requestId,
+      };
+    });
+    application = BoltApplication.create({
+      hooks: {
+        onRequest: () => {
+          events.push("request");
+        },
+        onResponse: (_context, response, durationMs) => {
+          events.push(`response:${response.status}`);
+          expect(durationMs).toBeGreaterThanOrEqual(0);
+        },
+      },
+      logger,
+      port: 0,
+      requests: { trustProxy: true },
+      router,
+    });
+    await application.start();
+
+    const response = await fetch(new URL("/trace", application.url), {
+      headers: {
+        "x-forwarded-for": "203.0.113.10, 127.0.0.1",
+        "x-request-id": "request-42",
+      },
+    });
+
+    expect(response.headers.get("x-request-id")).toBe("request-42");
+    expect(await response.json()).toEqual({
+      clientIp: "203.0.113.10",
+      requestId: "request-42",
+    });
+    expect(events).toEqual(["request", "response:200"]);
+    expect(records).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          message: "Inside handler",
+          requestId: "request-42",
+        }),
+        expect.objectContaining({
+          message: "Request completed",
+          requestId: "request-42",
+          status: 200,
+        }),
+      ]),
+    );
   });
 });
 

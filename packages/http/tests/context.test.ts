@@ -13,16 +13,42 @@ describe("HttpContext", () => {
         "x-request-id": "request-1",
       },
     });
+    const messages: string[] = [];
     const context = new HttpContext(request, {
+      clientIp: "127.0.0.1",
+      logger: {
+        debug: () => undefined,
+        error: () => undefined,
+        info: (message) => messages.push(message),
+        warn: () => undefined,
+      },
       params: { id: "42" },
+      requestId: "request-1",
       route,
     });
+    context.logger.info("handled");
 
+    expect(context.clientIp).toBe("127.0.0.1");
     expect(context.params).toEqual({ id: "42" });
     expect(context.query.get("draft")).toBe("true");
     expect(context.cookies.get("session")).toBe("abc123");
     expect(context.header("x-request-id")).toBe("request-1");
+    expect(context.requestId).toBe("request-1");
     expect(context.url.pathname).toBe("/users/42");
+    expect(messages).toEqual(["handled"]);
+  });
+
+  test("controls per-request timeouts when attached to a server", () => {
+    const calls: number[] = [];
+    const context = new HttpContext(new Request("http://localhost"), {
+      route,
+      timeout: (seconds) => calls.push(seconds),
+    });
+
+    context.timeout(30);
+
+    expect(calls).toEqual([30]);
+    expect(() => context.timeout(256)).toThrow("Request timeout");
   });
 
   test("parses JSON without erasing the requested type", async () => {

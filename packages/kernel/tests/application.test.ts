@@ -26,6 +26,12 @@ describe("BoltApplication", () => {
     ).toThrow("maxRequestBodySize");
   });
 
+  test("rejects invalid request id header names", () => {
+    expect(() =>
+      BoltApplication.create({ requests: { idHeader: "invalid header" } }),
+    ).toThrow("idHeader");
+  });
+
   test("starts an empty application", async () => {
     application = BoltApplication.create({ port: 0 });
 
