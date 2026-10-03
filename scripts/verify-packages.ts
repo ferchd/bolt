@@ -84,6 +84,7 @@ try {
     include: ["src/**/*.ts"],
   });
   writeFileSync(join(consumer, "src", "index.ts"), smokeApplication());
+  if (Bun.argv.includes("--services")) writeFileSync(join(consumer, "src/services.ts"), readFileSync(join(root, "scripts/registry-services-smoke.ts.template")));
 
   await run([process.execPath, "install", "--ignore-scripts"], consumer);
   await run(
@@ -96,6 +97,7 @@ try {
     consumer,
   );
   await run([process.execPath, "run", "src/index.ts"], consumer);
+  if (Bun.argv.includes("--services")) await run([process.execPath, "run", "src/services.ts"], consumer);
 
   console.log(`Verified ${packages.length} package tarballs with an external consumer.`);
 } finally {

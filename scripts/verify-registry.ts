@@ -17,9 +17,11 @@ try {
   writeFileSync(join(temporary, ".npmrc"), "@bolt:registry=https://gitlab.com/api/v4/projects/87197832/packages/npm/\n//gitlab.com/api/v4/projects/87197832/packages/npm/:_authToken=${BOLT_GITLAB_TOKEN}\n");
   writeFileSync(join(temporary, "tsconfig.json"), JSON.stringify({ compilerOptions: { allowImportingTsExtensions: true, lib: ["ESNext", "DOM"], module: "Preserve", moduleResolution: "bundler", noEmit: true, strict: true, target: "ESNext", types: ["bun"] }, include: ["src/**/*.ts"] }));
   writeFileSync(join(temporary, "src/index.ts"), smokeApplication());
+  if (Bun.argv.includes("--services")) writeFileSync(join(temporary, "src/services.ts"), readFileSync(join(root, "scripts/registry-services-smoke.ts.template")));
   await run([process.execPath, "install", "--ignore-scripts"]);
   await run([process.execPath, join(temporary, "node_modules/typescript/bin/tsc"), "--project", "tsconfig.json"]);
   await run([process.execPath, "run", "src/index.ts"]);
+  if (Bun.argv.includes("--services")) await run([process.execPath, "run", "src/services.ts"]);
   console.log(`Verified ${Object.keys(dependencies).length} published packages installed by name and version from GitLab.`);
 } finally { rmSync(temporary, { recursive: true, force: true }); }
 
