@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "paths": {
+      "@bolt/kernel": ["../kernel/src/index.ts"],
+      "@bolt/router": ["../router/src/index.ts"]
+    },
+    "tsBuildInfoFile": "../../node_modules/.cache/testing.tsbuildinfo"
+  },
+  "include": ["src/**/*.ts", "tests/**/*.ts"],
+  "exclude": ["dist", "node_modules"]
+}

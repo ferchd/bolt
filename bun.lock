@@ -62,6 +62,16 @@
         "@bolt/http": "workspace:*",
       },
     },
+    "packages/testing": {
+      "name": "@bolt/testing",
+      "version": "0.0.0",
+      "dependencies": {
+        "@bolt/kernel": "workspace:*",
+      },
+      "devDependencies": {
+        "@bolt/router": "workspace:*",
+      },
+    },
     "packages/validation": {
       "name": "@bolt/validation",
       "version": "0.0.0",
@@ -83,6 +93,8 @@
     "@bolt/logger": ["@bolt/logger@workspace:packages/logger"],
 
     "@bolt/router": ["@bolt/router@workspace:packages/router"],
+
+    "@bolt/testing": ["@bolt/testing@workspace:packages/testing"],
 
     "@bolt/validation": ["@bolt/validation@workspace:packages/validation"],
 
