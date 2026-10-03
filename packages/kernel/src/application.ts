@@ -14,7 +14,16 @@ export interface ApplicationOptions {
   readonly logger?: Logger;
   readonly port?: number;
   readonly router?: Router;
+  readonly server?: ServerOptions;
   readonly shutdownSignals?: false | readonly NodeJS.Signals[];
+}
+
+export interface ServerOptions {
+  readonly idleTimeout?: number;
+  readonly ipv6Only?: boolean;
+  readonly maxRequestBodySize?: number;
+  readonly reusePort?: boolean;
+  readonly tls?: Bun.TLSOptions | readonly Bun.TLSOptions[];
 }
 
 export class BoltApplication {
@@ -29,6 +38,7 @@ export class BoltApplication {
   public readonly logger: Logger;
 
   private constructor(options: ApplicationOptions) {
+    validateServerOptions(options.server);
     this.#options = options;
     this.logger = options.logger ?? logger;
   }
@@ -137,8 +147,19 @@ export class BoltApplication {
         error: (error) => this.handleError(error),
         fetch: () => new Response(null, { status: 404 }),
         hostname: this.#options.hostname,
+        idleTimeout:
+          this.#options.server?.idleTimeout ?? DEFAULT_IDLE_TIMEOUT,
+        ipv6Only: this.#options.server?.ipv6Only,
+        maxRequestBodySize:
+          this.#options.server?.maxRequestBodySize ??
+          DEFAULT_MAX_REQUEST_BODY_SIZE,
         port: this.#options.port,
+        reusePort: this.#options.server?.reusePort,
         routes,
+        tls: this.#options.server?.tls as
+          | Bun.TLSOptions
+          | Bun.TLSOptions[]
+          | undefined,
       });
       this.#state = "running";
       this.logger.info("Application started", { url: this.url.href });
@@ -281,6 +302,35 @@ export class BoltApplication {
 }
 
 const DEFAULT_SHUTDOWN_SIGNALS = ["SIGINT", "SIGTERM"] as const;
+const DEFAULT_IDLE_TIMEOUT = 10;
+const DEFAULT_MAX_REQUEST_BODY_SIZE = 1024 * 1024;
+
+function validateServerOptions(options: ServerOptions | undefined): void {
+  if (!options) {
+    return;
+  }
+
+  if (
+    options.idleTimeout !== undefined &&
+    (!Number.isSafeInteger(options.idleTimeout) ||
+      options.idleTimeout < 0 ||
+      options.idleTimeout > 255)
+  ) {
+    throw new RangeError(
+      "Server idleTimeout must be a safe integer from 0 to 255 seconds",
+    );
+  }
+
+  if (
+    options.maxRequestBodySize !== undefined &&
+    (!Number.isSafeInteger(options.maxRequestBodySize) ||
+      options.maxRequestBodySize <= 0)
+  ) {
+    throw new RangeError(
+      "Server maxRequestBodySize must be a positive safe integer",
+    );
+  }
+}
 
 function isDevelopment(
   development: Bun.Serve.Development | undefined,

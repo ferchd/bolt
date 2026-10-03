@@ -183,6 +183,26 @@ describe("BoltApplication HTTP lifecycle", () => {
       },
     });
   });
+
+  test("rejects request bodies larger than the configured limit", async () => {
+    const router = Router.create();
+    router.post("/upload", async (context) => ({
+      size: (await context.text()).length,
+    }));
+    application = BoltApplication.create({
+      port: 0,
+      router,
+      server: { maxRequestBodySize: 16 },
+    });
+    await application.start();
+
+    const response = await fetch(new URL("/upload", application.url), {
+      body: "x".repeat(32),
+      method: "POST",
+    });
+
+    expect(response.status).toBe(413);
+  });
 });
 
 function createApplication(router: Router): BoltApplication {

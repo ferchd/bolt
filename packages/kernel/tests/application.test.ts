@@ -17,6 +17,15 @@ describe("BoltApplication", () => {
     expect(application.isRunning).toBe(false);
   });
 
+  test("rejects unsafe HTTP server limits before startup", () => {
+    expect(() =>
+      BoltApplication.create({ server: { idleTimeout: 256 } }),
+    ).toThrow("idleTimeout");
+    expect(() =>
+      BoltApplication.create({ server: { maxRequestBodySize: 0 } }),
+    ).toThrow("maxRequestBodySize");
+  });
+
   test("starts an empty application", async () => {
     application = BoltApplication.create({ port: 0 });
 
