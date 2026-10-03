@@ -22,6 +22,7 @@ export { BoltApplication } from "./application.ts";
 export type {
   ApplicationHooks,
   ApplicationOptions,
+  ApplicationProvider,
   RequestOptions,
   ServerOptions,
 } from "./application.ts";

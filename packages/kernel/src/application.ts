@@ -3,6 +3,10 @@ import {
   toErrorResponse,
   type HttpContext,
 } from "@bolt/http";
+import {
+  Container,
+  type Provider as ContainerProvider,
+} from "@bolt/container";
 import logger, { type Logger } from "@bolt/logger";
 import router, { type Router } from "@bolt/router";
 
@@ -13,15 +17,23 @@ import type {
 } from "./lifecycle.ts";
 
 export interface ApplicationOptions {
+  readonly bindings?: readonly ContainerProvider<any, any>[];
   readonly development?: Bun.Serve.Development;
   readonly hostname?: string;
   readonly hooks?: ApplicationHooks;
   readonly logger?: Logger;
   readonly port?: number;
+  readonly providers?: readonly ApplicationProvider[];
   readonly requests?: RequestOptions;
   readonly router?: Router;
   readonly server?: ServerOptions;
   readonly shutdownSignals?: false | readonly NodeJS.Signals[];
+}
+
+export interface ApplicationProvider {
+  boot?(application: BoltApplication): void | PromiseLike<void>;
+  register(container: Container): void;
+  shutdown?(application: BoltApplication): void | PromiseLike<void>;
 }
 
 export interface ApplicationHooks {
@@ -52,6 +64,7 @@ export interface ServerOptions {
 }
 
 export class BoltApplication {
+  #container: Container;
   readonly #options: ApplicationOptions;
   readonly #services: ApplicationService[] = [];
   #server?: Bun.Server<undefined>;
@@ -67,6 +80,7 @@ export class BoltApplication {
     validateServerOptions(options.server);
     this.#options = options;
     this.logger = options.logger ?? logger;
+    this.#container = this.createContainer();
   }
 
   public static create(options: ApplicationOptions = {}): BoltApplication {
@@ -75,6 +89,10 @@ export class BoltApplication {
 
   public get isRunning(): boolean {
     return this.#state === "running";
+  }
+
+  public get container(): Container {
+    return this.#container;
   }
 
   public get state(): ApplicationState {
@@ -130,7 +148,7 @@ export class BoltApplication {
 
   public stop(): Promise<void> {
     if (this.#state === "stopped") {
-      return Promise.resolve();
+      return this.#container.dispose();
     }
 
     if (this.#state === "stopping") {
@@ -155,6 +173,11 @@ export class BoltApplication {
   }
 
   private async startApplication(): Promise<this> {
+    if (this.#container.state === "disposed") {
+      this.#container = this.createContainer();
+    }
+
+    const booted: ApplicationProvider[] = [];
     const started: ApplicationService[] = [];
 
     try {
@@ -165,6 +188,7 @@ export class BoltApplication {
           hooks: this.#options.hooks,
           logger: this.logger,
           requests: this.#options.requests,
+          services: this.#container,
         },
       );
       this.registerShutdownSignals();
@@ -172,6 +196,11 @@ export class BoltApplication {
       for (const service of this.#services) {
         await service.start?.(this);
         started.push(service);
+      }
+
+      for (const provider of this.#options.providers ?? []) {
+        await provider.boot?.(this);
+        booted.push(provider);
       }
 
       this.#server = Bun.serve({
@@ -205,7 +234,14 @@ export class BoltApplication {
         rollbackErrors.push(rollbackError);
       }
 
+      rollbackErrors.push(...(await this.shutdownProviders(booted)));
       rollbackErrors.push(...(await this.stopServices(started)));
+
+      try {
+        await this.#container.dispose();
+      } catch (rollbackError) {
+        rollbackErrors.push(rollbackError);
+      }
       this.#state = "stopped";
 
       if (rollbackErrors.length > 0) {
@@ -231,7 +267,16 @@ export class BoltApplication {
       errors.push(error);
     }
 
+    errors.push(
+      ...(await this.shutdownProviders(this.#options.providers ?? [])),
+    );
     errors.push(...(await this.stopServices(this.#services)));
+
+    try {
+      await this.#container.dispose();
+    } catch (error) {
+      errors.push(error);
+    }
     this.#state = "stopped";
 
     if (errors.length > 0) {
@@ -245,6 +290,16 @@ export class BoltApplication {
     if (this.#startOperation === operation) {
       this.#startOperation = undefined;
     }
+  }
+
+  private createContainer(): Container {
+    const container = Container.create(...(this.#options.bindings ?? []));
+
+    for (const provider of this.#options.providers ?? []) {
+      provider.register(container);
+    }
+
+    return container;
   }
 
   private clearStopOperation(operation: Promise<void>): void {
@@ -324,6 +379,22 @@ export class BoltApplication {
     for (const service of services.toReversed()) {
       try {
         await service.stop?.(this);
+      } catch (error) {
+        errors.push(error);
+      }
+    }
+
+    return errors;
+  }
+
+  private async shutdownProviders(
+    providers: readonly ApplicationProvider[],
+  ): Promise<unknown[]> {
+    const errors: unknown[] = [];
+
+    for (const provider of providers.toReversed()) {
+      try {
+        await provider.shutdown?.(this);
       } catch (error) {
         errors.push(error);
       }

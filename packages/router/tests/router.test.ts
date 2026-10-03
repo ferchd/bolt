@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { createToken } from "@bolt/container";
 
 import { Router } from "../src/index.ts";
 
@@ -105,6 +106,16 @@ describe("Router", () => {
     router.post("accounts", handler);
 
     expect(router.compile()["/accounts"]?.POST?.handler).toBe(handler);
+  });
+
+  test("preserves container controller tokens", () => {
+    const router = Router.create();
+    const controller = createToken<object>("accounts controller");
+    const handler = [controller, "index"] as const;
+
+    router.get("accounts", handler);
+
+    expect(router.compile()["/accounts"]?.GET?.handler).toBe(handler);
   });
 
   test("supports fluent route names and middleware", () => {

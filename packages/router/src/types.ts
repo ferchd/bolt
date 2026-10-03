@@ -1,10 +1,14 @@
 import type { HttpContext, Next } from "@bolt/http";
+import type { Token } from "@bolt/container";
 
 export type ControllerType = abstract new (...args: never[]) => object;
 
 export type LazyController = () => Promise<unknown>;
 
-export type ControllerReference = ControllerType | LazyController;
+export type ControllerReference =
+  | ControllerType
+  | LazyController
+  | Token<object>;
 
 export type ControllerHandler = readonly [
   controller: ControllerReference,

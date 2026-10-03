@@ -12,6 +12,7 @@
     "test": "bun test ./tests"
   },
   "dependencies": {
+    "@bolt/container": "workspace:*",
     "@bolt/http": "workspace:*",
     "@bolt/logger": "workspace:*",
     "@bolt/router": "workspace:*"

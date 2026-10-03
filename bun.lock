@@ -57,6 +57,7 @@
       "name": "@bolt/http",
       "version": "0.0.0",
       "dependencies": {
+        "@bolt/container": "workspace:*",
         "@bolt/validation": "workspace:*",
       },
     },
@@ -64,6 +65,7 @@
       "name": "@bolt/kernel",
       "version": "0.0.0",
       "dependencies": {
+        "@bolt/container": "workspace:*",
         "@bolt/http": "workspace:*",
         "@bolt/logger": "workspace:*",
         "@bolt/router": "workspace:*",
@@ -77,6 +79,7 @@
       "name": "@bolt/router",
       "version": "0.0.0",
       "dependencies": {
+        "@bolt/container": "workspace:*",
         "@bolt/http": "workspace:*",
       },
     },

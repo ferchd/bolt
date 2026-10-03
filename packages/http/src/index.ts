@@ -9,6 +9,7 @@ export type {
   HttpContextOptions,
   Next,
   RouteInfo,
+  ServiceResolver,
 } from "./context.ts";
 export type { HttpErrorOptions } from "./http-error.ts";
 export type { ErrorResponseOptions } from "./response.ts";

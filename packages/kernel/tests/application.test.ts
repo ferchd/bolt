@@ -1,8 +1,12 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { createToken, provideValue } from "@bolt/container";
 import { Router } from "@bolt/router";
 
 import { BoltApplication, Logger } from "../src/index.ts";
-import type { ApplicationService } from "../src/index.ts";
+import type {
+  ApplicationProvider,
+  ApplicationService,
+} from "../src/index.ts";
 
 describe("BoltApplication", () => {
   let application: BoltApplication | undefined;
@@ -114,6 +118,43 @@ describe("BoltApplication", () => {
       "start:second",
       "stop:second",
       "stop:first",
+    ]);
+  });
+
+  test("registers and boots providers across application restarts", async () => {
+    const name = createToken<string>("application name");
+    const calls: string[] = [];
+    const provider: ApplicationProvider = {
+      register(container) {
+        calls.push("register");
+        container.register(provideValue(name, "Bolt"));
+      },
+      boot(currentApplication) {
+        calls.push(`boot:${currentApplication.container.resolve(name)}`);
+      },
+      shutdown() {
+        calls.push("shutdown");
+      },
+    };
+    application = BoltApplication.create({
+      port: 0,
+      providers: [provider],
+    });
+
+    expect(application.container.resolve(name)).toBe("Bolt");
+
+    await application.start();
+    await application.stop();
+    await application.start();
+    await application.stop();
+
+    expect(calls).toEqual([
+      "register",
+      "boot:Bolt",
+      "shutdown",
+      "register",
+      "boot:Bolt",
+      "shutdown",
     ]);
   });
 

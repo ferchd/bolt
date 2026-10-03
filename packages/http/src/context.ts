@@ -1,4 +1,5 @@
 import { RequestValidator } from "./request-validator.ts";
+import type { Token } from "@bolt/container";
 
 export interface RouteInfo {
   readonly method: string;
@@ -11,8 +12,13 @@ export interface HttpContextOptions {
   readonly logger?: HttpLogger;
   readonly params?: Readonly<Record<string, string>>;
   readonly requestId?: string;
+  readonly services?: ServiceResolver;
   readonly route: RouteInfo;
   readonly timeout?: (seconds: number) => void;
+}
+
+export interface ServiceResolver {
+  resolve<Value>(token: Token<Value>): Value;
 }
 
 export type HttpLogContext = Readonly<Record<string, unknown>>;
@@ -34,6 +40,7 @@ export class HttpContext {
   public readonly params: Readonly<Record<string, string>>;
   public readonly requestId: string;
   public readonly route: RouteInfo;
+  public readonly services: ServiceResolver;
   public readonly validate: RequestValidator;
 
   public constructor(
@@ -48,6 +55,7 @@ export class HttpContext {
     this.params = options.params ?? {};
     this.requestId = options.requestId ?? crypto.randomUUID();
     this.route = options.route;
+    this.services = options.services ?? UNAVAILABLE_SERVICES;
     this.validate = new RequestValidator(this);
   }
 
@@ -92,6 +100,10 @@ export class HttpContext {
 
     this.#timeout(seconds);
   }
+
+  public resolve<Value>(token: Token<Value>): Value {
+    return this.services.resolve(token);
+  }
 }
 
 export type Next = () => Promise<unknown>;
@@ -111,4 +123,10 @@ const NOOP_LOGGER: HttpLogger = Object.freeze({
   error: () => undefined,
   info: () => undefined,
   warn: () => undefined,
+});
+
+const UNAVAILABLE_SERVICES: ServiceResolver = Object.freeze({
+  resolve(): never {
+    throw new Error("Application services are unavailable");
+  },
 });

@@ -6,6 +6,7 @@ import {
   type Next,
   type RouteInfo,
 } from "@bolt/http";
+import { isToken, type Container } from "@bolt/container";
 import type { Logger } from "@bolt/logger";
 import type {
   CompiledRoute,
@@ -34,6 +35,7 @@ interface DispatcherOptions {
   readonly hooks?: ApplicationHooks;
   readonly logger: Logger;
   readonly requests?: RequestOptions;
+  readonly services: Container;
 }
 
 interface BunDispatcher {
@@ -88,7 +90,7 @@ function createBunHandler(
   return async (request, server) => {
     return handleRequest(request, server, route, options, (context) =>
       runMiddleware(route.middleware, context, () =>
-        invokeRouteHandler(route, context),
+        invokeRouteHandler(route, context, options.services),
       ),
     );
   };
@@ -128,6 +130,7 @@ async function handleRequest(
     params: getRequestParams(request),
     requestId,
     route,
+    services: options.services,
     timeout: (seconds) => server.timeout(request, seconds),
   });
   let response: Response;
@@ -277,6 +280,7 @@ function resolveMiddleware(middleware: RouteMiddleware): {
 async function invokeRouteHandler(
   route: CompiledRoute,
   context: HttpContext,
+  services: Container,
 ): Promise<unknown> {
   const handler = route.handler;
 
@@ -285,12 +289,16 @@ async function invokeRouteHandler(
   }
 
   const [reference, action] = handler;
-  const controller = await resolveController(reference);
-  const instance = Reflect.construct(controller, []);
+  const instance = isToken(reference)
+    ? services.resolve(reference)
+    : Reflect.construct(await resolveController(reference), []);
   const method = Reflect.get(instance, action);
 
   if (typeof method !== "function") {
-    throw new TypeError(`${controller.name}.${action} is not callable`);
+    const name = isToken(reference)
+      ? reference.description
+      : instance.constructor.name;
+    throw new TypeError(`${name}.${action} is not callable`);
   }
 
   return Reflect.apply(method, instance, [context]);
@@ -305,6 +313,10 @@ function isControllerHandler(
 async function resolveController(
   reference: ControllerReference,
 ): Promise<ControllerType> {
+  if (isToken(reference)) {
+    throw new TypeError("Controller tokens must be resolved by the container");
+  }
+
   if (isController(reference)) {
     return reference;
   }

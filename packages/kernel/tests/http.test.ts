@@ -1,4 +1,9 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import {
+  createToken,
+  provideClass,
+  provideValue,
+} from "@bolt/container";
 import { Router } from "@bolt/router";
 
 import {
@@ -95,6 +100,43 @@ describe("BoltApplication HTTP lifecycle", () => {
 
     expect(await first.json()).toEqual({ count: 1 });
     expect(await second.json()).toEqual({ count: 1 });
+  });
+
+  test("resolves controllers and services from the application container", async () => {
+    const prefix = createToken<string>("greeting prefix");
+    const controller = createToken<GreetingController>(
+      "greeting controller",
+    );
+
+    class GreetingController {
+      public constructor(private readonly greetingPrefix: string) {}
+
+      public show(context: HttpContext): { greeting: string; service: string } {
+        return {
+          greeting: `${this.greetingPrefix}, Bolt`,
+          service: context.resolve(prefix),
+        };
+      }
+    }
+
+    const router = Router.create();
+    router.get("/injected", [controller, "show"]);
+    application = BoltApplication.create({
+      bindings: [
+        provideValue(prefix, "Hello"),
+        provideClass(controller, [prefix], GreetingController),
+      ],
+      port: 0,
+      router,
+    });
+
+    await application.start();
+    const response = await fetch(new URL("/injected", application.url));
+
+    expect(await response.json()).toEqual({
+      greeting: "Hello, Bolt",
+      service: "Hello",
+    });
   });
 
   test("resolves lazy controllers", async () => {

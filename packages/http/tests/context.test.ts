@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { Container, createToken, provideValue } from "@bolt/container";
 
 import { HttpContext } from "../src/index.ts";
 import v from "@bolt/validation";
@@ -49,6 +50,17 @@ describe("HttpContext", () => {
 
     expect(calls).toEqual([30]);
     expect(() => context.timeout(256)).toThrow("Request timeout");
+  });
+
+  test("resolves typed application services", () => {
+    const name = createToken<string>("application name");
+    const services = Container.create(provideValue(name, "Bolt"));
+    const context = new HttpContext(new Request("http://localhost"), {
+      route,
+      services,
+    });
+
+    expect(context.resolve(name)).toBe("Bolt");
   });
 
   test("parses JSON without erasing the requested type", async () => {
