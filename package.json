@@ -8,8 +8,9 @@
     "examples/*"
   ],
   "scripts": {
-    "dev": "bun run --filter @bolt/example-routing dev",
-    "start": "bun run --filter @bolt/example-routing start",
+    "dev": "bun run --filter @bolt/example-api dev",
+    "start": "bun run --filter @bolt/example-api start",
+    "example:api": "bun run --filter @bolt/example-api start",
     "example:empty": "bun run --filter @bolt/example-empty start",
     "example:routing": "bun run --filter @bolt/example-routing start",
     "typecheck": "bun run --workspaces --if-present typecheck",

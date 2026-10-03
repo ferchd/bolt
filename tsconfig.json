@@ -32,7 +32,8 @@
   "include": [
     "packages/*/src/**/*.ts",
     "packages/*/tests/**/*.ts",
-    "examples/*/src/**/*.ts"
+    "examples/*/src/**/*.ts",
+    "examples/*/tests/**/*.ts"
   ],
   "exclude": ["node_modules", "**/dist"]
 }

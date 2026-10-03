@@ -1,0 +1,22 @@
+{
+  "name": "@bolt/example-api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun --watch src/main.ts",
+    "start": "bun src/main.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "bun test ./tests"
+  },
+  "dependencies": {
+    "@bolt/config": "workspace:*",
+    "@bolt/database": "workspace:*",
+    "@bolt/kernel": "workspace:*",
+    "@bolt/router": "workspace:*",
+    "@bolt/validation": "workspace:*"
+  },
+  "devDependencies": {
+    "@bolt/testing": "workspace:*"
+  }
+}

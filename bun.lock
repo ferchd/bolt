@@ -10,6 +10,20 @@
         "typescript": "7.0.2",
       },
     },
+    "examples/api": {
+      "name": "@bolt/example-api",
+      "version": "0.0.0",
+      "dependencies": {
+        "@bolt/config": "workspace:*",
+        "@bolt/database": "workspace:*",
+        "@bolt/kernel": "workspace:*",
+        "@bolt/router": "workspace:*",
+        "@bolt/validation": "workspace:*",
+      },
+      "devDependencies": {
+        "@bolt/testing": "workspace:*",
+      },
+    },
     "examples/empty": {
       "name": "@bolt/example-empty",
       "version": "0.0.0",
@@ -81,6 +95,8 @@
     "@bolt/config": ["@bolt/config@workspace:packages/config"],
 
     "@bolt/database": ["@bolt/database@workspace:packages/database"],
+
+    "@bolt/example-api": ["@bolt/example-api@workspace:examples/api"],
 
     "@bolt/example-empty": ["@bolt/example-empty@workspace:examples/empty"],
 
