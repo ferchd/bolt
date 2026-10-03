@@ -1,7 +1,7 @@
 {
   "name": "@bolt/router",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
+  "private": false,
   "type": "module",
   "module": "./src/index.ts",
   "types": "./src/index.ts",
@@ -11,8 +11,12 @@
       "bun": "./src/index.ts"
     }
   },
-  "files": ["src"],
-  "engines": { "bun": ">=1.4.0" },
+  "files": [
+    "src"
+  ],
+  "engines": {
+    "bun": ">=1.4.0"
+  },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "bun test ./tests"
@@ -20,5 +24,13 @@
   "dependencies": {
     "@bolt/container": "workspace:*",
     "@bolt/http": "workspace:*"
+  },
+  "publishConfig": {
+    "registry": "https://gitlab.com/api/v4/projects/87197832/packages/npm/"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://gitlab.com/ferchd/bolt.git",
+    "directory": "packages/router"
   }
 }

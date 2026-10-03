@@ -9,6 +9,8 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
+import { smokeApplication } from "./consumer-smoke.ts";
+
 interface PackageManifest {
   readonly name: string;
 }
@@ -126,66 +128,4 @@ function fileDependency(path: string): string {
 function writeJson(path: string, value: unknown): void {
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`);
-}
-
-function smokeApplication(): string {
-  return `import { runCli } from "@bolt/cli";
-import { Environment } from "@bolt/config";
-import { createToken, provideValue } from "@bolt/container";
-import { Database } from "@bolt/database";
-import { HttpError } from "@bolt/http";
-import { BoltApplication } from "@bolt/kernel";
-import { Logger } from "@bolt/logger";
-import { Router } from "@bolt/router";
-import { secureHeaders } from "@bolt/security";
-import { TestClient } from "@bolt/testing";
-import v from "@bolt/validation";
-
-const message = createToken<string>("message");
-const router = Router.create();
-
-router
-  .get("/", (context) => ({ message: context.resolve(message) }))
-  .use(secureHeaders());
-
-const application = BoltApplication.create({
-  bindings: [provideValue(message, "ready")],
-  development: false,
-  hostname: "127.0.0.1",
-  port: 0,
-  router,
-  shutdownSignals: false,
-});
-const client = TestClient.create(application);
-const response = await client.get("/");
-
-if (response.status !== 200 || (await response.json()).message !== "ready") {
-  throw new Error("Packaged application smoke test failed");
-}
-
-const database = Database.create({ filename: ":memory:" });
-database.start({ migrate: false });
-database.stop();
-
-if (Environment.create({ PORT: "3000" }).integer("PORT") !== 3000) {
-  throw new Error("Packaged config smoke test failed");
-}
-
-if (v.uuid().safeParse(crypto.randomUUID()).success !== true) {
-  throw new Error("Packaged validation smoke test failed");
-}
-
-Logger.create({ level: "silent" }).info("ignored");
-void new HttpError(400, "smoke");
-
-const cliOutput: string[] = [];
-if (await runCli({
-  argv: ["help"],
-  io: { error: (value) => cliOutput.push(value), log: (value) => cliOutput.push(value) },
-}) !== 0 || cliOutput.length !== 1) {
-  throw new Error("Packaged CLI smoke test failed");
-}
-
-await client.close();
-`;
 }

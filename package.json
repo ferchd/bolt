@@ -13,10 +13,15 @@
     "example:api": "bun run --filter @bolt/example-api start",
     "example:empty": "bun run --filter @bolt/example-empty start",
     "example:routing": "bun run --filter @bolt/example-routing start",
+    "example:persistence": "bun run --filter @bolt/example-persistence start",
     "typecheck": "tsc --noEmit -p tsconfig.json && bun run --workspaces --if-present typecheck",
     "test": "bun run --workspaces --if-present test",
     "check": "bun run typecheck && bun run test",
-    "verify:packages": "bun scripts/verify-packages.ts"
+    "verify:packages": "bun scripts/verify-packages.ts",
+    "verify:registry": "bun scripts/verify-registry.ts",
+    "release:check": "bun scripts/release.ts",
+    "release:publish": "bun scripts/release.ts --publish",
+    "verify:recovery": "bun scripts/verify-recovery.ts"
   },
   "devDependencies": {
     "@types/bun": "1.4.2",

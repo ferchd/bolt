@@ -34,6 +34,23 @@
         "@bolt/kernel": "workspace:*",
       },
     },
+    "examples/persistence": {
+      "name": "@bolt/example-persistence",
+      "dependencies": {
+        "@bolt/auth": "workspace:*",
+        "@bolt/config": "workspace:*",
+        "@bolt/container": "workspace:*",
+        "@bolt/database": "workspace:*",
+        "@bolt/http": "workspace:*",
+        "@bolt/kernel": "workspace:*",
+        "@bolt/orm": "workspace:*",
+        "@bolt/router": "workspace:*",
+        "@bolt/security": "workspace:*",
+        "@bolt/storage": "workspace:*",
+        "@bolt/testing": "workspace:*",
+        "@bolt/validation": "workspace:*",
+      },
+    },
     "examples/routing": {
       "name": "@bolt/example-routing",
       "version": "0.0.0",
@@ -44,28 +61,44 @@
         "@bolt/validation": "workspace:*",
       },
     },
+    "packages/auth": {
+      "name": "@bolt/auth",
+      "version": "0.1.0",
+      "dependencies": {
+        "@bolt/database": "workspace:*",
+        "@bolt/http": "workspace:*",
+        "@bolt/security": "workspace:*",
+      },
+    },
     "packages/cli": {
       "name": "@bolt/cli",
-      "version": "0.0.0",
+      "version": "0.1.0",
       "bin": {
         "bolt": "./src/bin.ts",
       },
     },
     "packages/config": {
       "name": "@bolt/config",
-      "version": "0.0.0",
+      "version": "0.1.0",
     },
     "packages/container": {
       "name": "@bolt/container",
-      "version": "0.0.0",
+      "version": "0.1.0",
     },
     "packages/database": {
       "name": "@bolt/database",
-      "version": "0.0.0",
+      "version": "0.1.0",
+    },
+    "packages/database-odbc": {
+      "name": "@bolt/database-odbc",
+      "version": "0.1.0",
+      "dependencies": {
+        "@bolt/database": "workspace:*",
+      },
     },
     "packages/http": {
       "name": "@bolt/http",
-      "version": "0.0.0",
+      "version": "0.1.0",
       "dependencies": {
         "@bolt/container": "workspace:*",
         "@bolt/validation": "workspace:*",
@@ -73,7 +106,7 @@
     },
     "packages/kernel": {
       "name": "@bolt/kernel",
-      "version": "0.0.0",
+      "version": "0.1.0",
       "dependencies": {
         "@bolt/container": "workspace:*",
         "@bolt/http": "workspace:*",
@@ -83,11 +116,18 @@
     },
     "packages/logger": {
       "name": "@bolt/logger",
-      "version": "0.0.0",
+      "version": "0.1.0",
+    },
+    "packages/orm": {
+      "name": "@bolt/orm",
+      "version": "0.1.0",
+      "dependencies": {
+        "@bolt/database": "workspace:*",
+      },
     },
     "packages/router": {
       "name": "@bolt/router",
-      "version": "0.0.0",
+      "version": "0.1.0",
       "dependencies": {
         "@bolt/container": "workspace:*",
         "@bolt/http": "workspace:*",
@@ -95,11 +135,15 @@
     },
     "packages/security": {
       "name": "@bolt/security",
-      "version": "0.0.0",
+      "version": "0.1.0",
+    },
+    "packages/storage": {
+      "name": "@bolt/storage",
+      "version": "0.1.0",
     },
     "packages/testing": {
       "name": "@bolt/testing",
-      "version": "0.0.0",
+      "version": "0.1.0",
       "dependencies": {
         "@bolt/kernel": "workspace:*",
       },
@@ -109,10 +153,12 @@
     },
     "packages/validation": {
       "name": "@bolt/validation",
-      "version": "0.0.0",
+      "version": "0.1.0",
     },
   },
   "packages": {
+    "@bolt/auth": ["@bolt/auth@workspace:packages/auth"],
+
     "@bolt/cli": ["@bolt/cli@workspace:packages/cli"],
 
     "@bolt/config": ["@bolt/config@workspace:packages/config"],
@@ -121,9 +167,13 @@
 
     "@bolt/database": ["@bolt/database@workspace:packages/database"],
 
+    "@bolt/database-odbc": ["@bolt/database-odbc@workspace:packages/database-odbc"],
+
     "@bolt/example-api": ["@bolt/example-api@workspace:examples/api"],
 
     "@bolt/example-empty": ["@bolt/example-empty@workspace:examples/empty"],
+
+    "@bolt/example-persistence": ["@bolt/example-persistence@workspace:examples/persistence"],
 
     "@bolt/example-routing": ["@bolt/example-routing@workspace:examples/routing"],
 
@@ -133,9 +183,13 @@
 
     "@bolt/logger": ["@bolt/logger@workspace:packages/logger"],
 
+    "@bolt/orm": ["@bolt/orm@workspace:packages/orm"],
+
     "@bolt/router": ["@bolt/router@workspace:packages/router"],
 
     "@bolt/security": ["@bolt/security@workspace:packages/security"],
+
+    "@bolt/storage": ["@bolt/storage@workspace:packages/storage"],
 
     "@bolt/testing": ["@bolt/testing@workspace:packages/testing"],
 

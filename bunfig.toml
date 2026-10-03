@@ -7,6 +7,9 @@ prefer = "offline"
 linker = "isolated"
 globalStore = true
 
+[install.scopes]
+"@bolt" = "https://gitlab.com/api/v4/projects/87197832/packages/npm/"
+
 # Bun's shell keeps package scripts fast and portable across operating systems.
 [run]
 shell = "bun"
