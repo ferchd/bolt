@@ -54,6 +54,10 @@
         "@bolt/http": "workspace:*",
       },
     },
+    "packages/validation": {
+      "name": "@bolt/validation",
+      "version": "0.0.0",
+    },
   },
   "packages": {
     "@bolt/config": ["@bolt/config@workspace:packages/config"],
@@ -69,6 +73,8 @@
     "@bolt/logger": ["@bolt/logger@workspace:packages/logger"],
 
     "@bolt/router": ["@bolt/router@workspace:packages/router"],
+
+    "@bolt/validation": ["@bolt/validation@workspace:packages/validation"],
 
     "@types/bun": ["@types/bun@1.4.2", "", { "dependencies": { "bun-types": "1.4.2" } }, "sha512-GimotNn7+ZV0uVArItBbriZsR1oNf0+WTzPkdcFrzShI7k2norL0uzEaJT8T33dWr7O/c9ZDuAFQrctKCi72oQ=="],
 
