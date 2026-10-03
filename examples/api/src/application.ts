@@ -1,13 +1,24 @@
 import env from "@bolt/config";
+import {
+  provideClass,
+  provideValue,
+} from "@bolt/container";
 import { Database } from "@bolt/database";
 import {
   BoltApplication,
+  type ApplicationProvider,
   type ApplicationOptions,
 } from "@bolt/kernel";
 import { Router } from "@bolt/router";
 
 import { taskMigrations } from "./migrations.ts";
 import { registerRoutes } from "./routes.ts";
+import { TasksController } from "./tasks-controller.ts";
+import {
+  applicationNameToken,
+  databaseToken,
+  tasksControllerToken,
+} from "./tokens.ts";
 
 export interface TaskApplicationOptions {
   readonly application?: Omit<ApplicationOptions, "router">;
@@ -29,17 +40,33 @@ export function createTaskApplication(
       options.databaseFilename ??
       env.string("DATABASE_PATH", "storage/tasks.sqlite"),
     migrations: taskMigrations,
+    migrateOnStart: env.boolean("DATABASE_MIGRATE_ON_START", true),
   });
   const router = Router.create();
+  const name = options.name ?? env.string("APP_NAME", "Bolt Tasks");
+  const taskProvider: ApplicationProvider = {
+    register(container) {
+      container.register(
+        provideValue(applicationNameToken, name),
+        provideValue(databaseToken, database),
+        provideClass(
+          tasksControllerToken,
+          [databaseToken],
+          TasksController,
+        ),
+      );
+    },
+  };
 
-  registerRoutes(
-    router,
-    database,
-    options.name ?? env.string("APP_NAME", "Bolt Tasks"),
-  );
+  registerRoutes(router);
 
   const application = BoltApplication.create({
     ...options.application,
+    providers: [...(options.application?.providers ?? []), taskProvider],
+    requests: {
+      trustProxy: env.boolean("TRUST_PROXY", false),
+      ...options.application?.requests,
+    },
     router,
   }).use(database);
 

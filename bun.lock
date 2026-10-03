@@ -15,6 +15,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@bolt/config": "workspace:*",
+        "@bolt/container": "workspace:*",
         "@bolt/database": "workspace:*",
         "@bolt/kernel": "workspace:*",
         "@bolt/router": "workspace:*",

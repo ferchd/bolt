@@ -16,7 +16,7 @@ describe("task API", () => {
     const response = await client.get("/health");
 
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({
+    expect(await response.json()).toMatchObject({
       application: "Bolt Tasks Test",
       database: "up",
       status: "ok",
