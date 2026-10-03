@@ -167,6 +167,10 @@ try {
                 'open' {
                     if ($null -ne $connection) { throw 'Connection already open' }
                     $dialect = [string]$request.dialect
+                    # Oracle's default client charset can be US7ASCII. Wide ODBC
+                    # bindings still pass CHAR expressions through this charset;
+                    # use a Unicode charset and deterministic numeric formatting.
+                    if ($dialect -eq 'oracle') { $env:NLS_LANG = 'AMERICAN_AMERICA.AL32UTF8' }
                     $commandTimeout = [int]$request.commandTimeout
                     $maxRows = [int]$request.maxRows
                     $maxResponseBytes = [int]$request.maxResponseBytes

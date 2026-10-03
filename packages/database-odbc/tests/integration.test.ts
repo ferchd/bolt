@@ -85,7 +85,8 @@ describe.skipIf(!oracleConnection)("real Oracle original ODBC transport", () => 
     const table = `bolt_oracle_u_${suffix}`;
     const ledger = `bolt_oracle_m_${suffix}`;
     const quoted = `"${table}"`;
-    const migration = sqlMigration("001-users", [`CREATE TABLE ${quoted} ("id" NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, "name" NVARCHAR2(120) NOT NULL, "age" NUMBER(10,0) NOT NULL, "note" NVARCHAR2(120), "version" NUMBER(10,0) NOT NULL)`], { transactional: false });
+    // Oracle serializable transactions cannot materialize deferred segments.
+    const migration = sqlMigration("001-users", [`CREATE TABLE ${quoted} ("id" NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, "name" NVARCHAR2(120) NOT NULL, "age" NUMBER(10,0) NOT NULL, "note" NVARCHAR2(120), "version" NUMBER(10,0) NOT NULL) SEGMENT CREATION IMMEDIATE`], { transactional: false });
     await db.start();
     try {
       const exact = "12345678901234567890123456789012345678";

@@ -50,6 +50,10 @@ only through the private stdin pipe, never through process arguments or logs.
 Provider errors expose SQLSTATE and native numeric codes, excluding provider
 text, SQL and credential values. `workerScript` and `powershellExecutable` are
 trusted administrator configuration and must never come from request input.
+The Oracle worker sets its own `NLS_LANG=AMERICAN_AMERICA.AL32UTF8` before opening
+the driver, preserving Unicode through native CHAR conversions and deterministic
+numeric text. This does not change the application's or operating system's
+environment. See [Oracle's Unicode guidance](https://docs.oracle.com/en/database/oracle/oracle-database/19/nlspg/programming-with-unicode.html).
 
 ## Query and transaction behavior
 
@@ -64,6 +68,11 @@ trusted administrator configuration and must never come from request input.
   `OdbcTransaction`. Oracle's `SET TRANSACTION ISOLATION LEVEL` starts the .NET
   transaction, preventing per-statement autocommit. Nested savepoint statements
   use that same connection and transaction.
+  Oracle serializable writes require materialized table segments: use
+  `SEGMENT CREATION IMMEDIATE` when creating tables that will receive their first
+  writes in such a transaction. Oracle's native `ORA-08177` concurrency failure
+  is surfaced rather than replaying application callbacks. See
+  [Oracle's transaction restrictions](https://docs.oracle.com/en/database/oracle/oracle-database/26/adfns/database-development-guide.pdf).
 - Release waits for queued session commands and rolls back outstanding work.
   A timeout, malformed protocol frame or crashed worker disposes the process;
   an unavailable physical connection is replaced for subsequent reservations.
@@ -119,9 +128,13 @@ SQL Server ODBC driver. The same integration also passed using PowerShell 7.6.5.
 exact values, output binds, rollback/savepoints, concurrent DDL migration locks,
 generated identities and ORM request scopes; an
 optional `BOLT_TEST_ODBC_POWERSHELL` selects the executable for both integration
-suites. Oracle Instant Client Basic/ODBC 23.26.3 has been downloaded from Oracle
-and verified against its published SHA-256 checksums. Real Oracle Free 26ai
-23.26.3 database creation and validation are currently in progress. This test
-deployment uses a compatibility container on Ubuntu 22.04; it does not establish
+suites. This passed against real Oracle Free 26ai 23.26.3 using Windows PowerShell
+5.1 and Oracle Instant Client Basic/ODBC 23.26.3, downloaded from Oracle and
+verified against published SHA-256 checksums. Separate ORM integration also
+verified simultaneous NUMBER(38)/VARCHAR generated output binds, composite keys,
+identities beyond JavaScript's safe integer range, trigger hydration and rollback.
+The [native test harness](tests/oracle/README.md) records the sources, checksums,
+configuration and isolated cleanup requirements. This test deployment uses a
+compatibility container on Ubuntu 22.04; it does not establish
 Oracle certification for that operating system. Production deployments should
 follow Oracle's supported platform and driver requirements.
