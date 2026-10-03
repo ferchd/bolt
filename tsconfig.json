@@ -33,7 +33,8 @@
     "packages/*/src/**/*.ts",
     "packages/*/tests/**/*.ts",
     "examples/*/src/**/*.ts",
-    "examples/*/tests/**/*.ts"
+    "examples/*/tests/**/*.ts",
+    "scripts/**/*.ts"
   ],
   "exclude": ["node_modules", "**/dist"]
 }
