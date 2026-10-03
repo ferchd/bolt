@@ -1,5 +1,3 @@
-import { createTaskApplication } from "./application.ts";
-
-const { application } = createTaskApplication();
+import { application } from "./application.ts";
 
 await application.start();

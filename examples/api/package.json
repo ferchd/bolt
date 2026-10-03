@@ -4,10 +4,13 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "bun --watch src/main.ts",
-    "start": "bun src/main.ts",
+    "dev": "bolt dev",
+    "migrate": "bolt migrate",
+    "migrate:status": "bolt migrate:status",
+    "routes": "bolt routes",
+    "start": "bolt start",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "bun test ./tests"
+    "test": "bolt test ./tests"
   },
   "dependencies": {
     "@bolt/config": "workspace:*",
@@ -15,9 +18,11 @@
     "@bolt/database": "workspace:*",
     "@bolt/kernel": "workspace:*",
     "@bolt/router": "workspace:*",
+    "@bolt/security": "workspace:*",
     "@bolt/validation": "workspace:*"
   },
   "devDependencies": {
+    "@bolt/cli": "workspace:*",
     "@bolt/testing": "workspace:*"
   }
 }

@@ -16,11 +16,55 @@ describe("task API", () => {
     const response = await client.get("/health");
 
     expect(response.status).toBe(200);
+    expect(response.headers.get("x-content-type-options")).toBe("nosniff");
+    expect(response.headers.get("x-request-id")).toBeTruthy();
     expect(await response.json()).toMatchObject({
       application: "Bolt Tasks Test",
       database: "up",
       status: "ok",
     });
+  });
+
+  test("answers CORS preflight before invoking a route", async () => {
+    const client = createClient();
+    await client.get("/health");
+    const origin = client.application.url.origin;
+    const response = await client.options("/api/tasks", {
+      headers: {
+        "access-control-request-method": "POST",
+        origin,
+      },
+    });
+
+    expect(response.status).toBe(204);
+    expect(response.headers.get("access-control-allow-origin")).toBe(
+      origin,
+    );
+    expect(response.headers.get("access-control-allow-methods")).toContain(
+      "POST",
+    );
+  });
+
+  test("issues CSRF tokens and stores signed sessions", async () => {
+    const client = createClient();
+    const csrfResponse = await client.get("/api/security/csrf");
+    const { token } = await csrfResponse.json() as { token: string };
+    const csrfCookie = cookiePair(csrfResponse);
+    const login = await client.post("/api/security/session", {
+      headers: {
+        cookie: csrfCookie,
+        "x-csrf-token": token,
+      },
+      json: { password: "test-password", username: "bolt" },
+    });
+
+    expect(login.status).toBe(200);
+    expect(await login.json()).toEqual({ user: "bolt" });
+
+    const session = await client.get("/api/security/session", {
+      headers: { cookie: cookiePair(login) },
+    });
+    expect(await session.json()).toEqual({ user: "bolt" });
   });
 
   test("creates, lists and filters tasks", async () => {
@@ -106,10 +150,22 @@ describe("task API", () => {
         shutdownSignals: false,
       },
       databaseFilename: ":memory:",
+      demoPassword: "test-password",
       name: "Bolt Tasks Test",
+      securitySecret: "test-secret-that-is-at-least-32-bytes-long",
     });
     const client = TestClient.create(application);
     clients.push(client);
     return client;
   }
 });
+
+function cookiePair(response: Response): string {
+  const value = response.headers.get("set-cookie");
+
+  if (!value) {
+    throw new Error("Expected response to set a cookie");
+  }
+
+  return value.split(";", 1)[0]!;
+}

@@ -19,9 +19,11 @@
         "@bolt/database": "workspace:*",
         "@bolt/kernel": "workspace:*",
         "@bolt/router": "workspace:*",
+        "@bolt/security": "workspace:*",
         "@bolt/validation": "workspace:*",
       },
       "devDependencies": {
+        "@bolt/cli": "workspace:*",
         "@bolt/testing": "workspace:*",
       },
     },

@@ -10,6 +10,14 @@ import {
   type ApplicationOptions,
 } from "@bolt/kernel";
 import { Router } from "@bolt/router";
+import {
+  cors,
+  csrf,
+  hashPassword,
+  rateLimit,
+  secureHeaders,
+  SignedCookies,
+} from "@bolt/security";
 
 import { taskMigrations } from "./migrations.ts";
 import { registerRoutes } from "./routes.ts";
@@ -23,7 +31,9 @@ import {
 export interface TaskApplicationOptions {
   readonly application?: Omit<ApplicationOptions, "router">;
   readonly databaseFilename?: string;
+  readonly demoPassword?: string;
   readonly name?: string;
+  readonly securitySecret?: string;
 }
 
 export interface TaskApplication {
@@ -44,6 +54,26 @@ export function createTaskApplication(
   });
   const router = Router.create();
   const name = options.name ?? env.string("APP_NAME", "Bolt Tasks");
+  const securitySecret = options.securitySecret ?? env.string(
+    "APP_KEY",
+    "development-only-secret-change-before-production",
+  );
+  const secureCookie = env.boolean("COOKIE_SECURE", false);
+  const csrfProtection = csrf({
+    secrets: securitySecret,
+    secureCookie,
+  });
+  let demoPasswordHash: Promise<string> | undefined;
+  const security = {
+    csrf: csrfProtection,
+    passwordHash: () => demoPasswordHash ??= hashPassword(
+      options.demoPassword ??
+        env.string("DEMO_PASSWORD", "bolt-demo-password"),
+    ),
+    rateLimit: rateLimit({ limit: 100, windowMs: 60_000 }),
+    secureCookie,
+    sessions: SignedCookies.create({ secrets: securitySecret }),
+  };
   const taskProvider: ApplicationProvider = {
     register(container) {
       container.register(
@@ -58,7 +88,9 @@ export function createTaskApplication(
     },
   };
 
-  registerRoutes(router);
+  router
+    .group(() => registerRoutes(router, security))
+    .use([secureHeaders(), cors()]);
 
   const application = BoltApplication.create({
     ...options.application,
@@ -72,3 +104,5 @@ export function createTaskApplication(
 
   return { application, database, router };
 }
+
+export const { application, database, router } = createTaskApplication();
