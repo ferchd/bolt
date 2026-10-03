@@ -40,6 +40,10 @@ export interface DatabaseStartOptions {
   readonly migrate?: boolean;
 }
 
+interface DatabaseLifecycleContext {
+  readonly state: string;
+}
+
 export interface DatabaseTransaction<
   Arguments extends unknown[],
   Result,
@@ -211,7 +215,9 @@ export class Database {
     return this.getConnection().run<Parameters>(sql, ...bindings);
   }
 
-  public start(options: DatabaseStartOptions = {}): void {
+  public start(
+    options: DatabaseStartOptions | DatabaseLifecycleContext = {},
+  ): void {
     if (this.#state === "running") {
       return;
     }
@@ -231,7 +237,11 @@ export class Database {
     try {
       configureConnection(connection, this.#options);
 
-      if (options.migrate ?? this.#options.migrateOnStart) {
+      const migrate = "migrate" in options
+        ? options.migrate
+        : this.#options.migrateOnStart;
+
+      if (migrate ?? this.#options.migrateOnStart) {
         this.migrate();
       }
     } catch (error) {
