@@ -54,6 +54,39 @@ export abstract class Schema<Output> {
     return new OptionalSchema(this);
   }
 
+  public nullable(): NullableSchema<Schema<Output>> {
+    return new NullableSchema(this);
+  }
+
+  public default(
+    value:
+      | Exclude<Output, undefined>
+      | (() => Exclude<Output, undefined>),
+  ): DefaultSchema<Schema<Output>> {
+    return new DefaultSchema<Schema<Output>>(this, value);
+  }
+
+  public refine<Refined extends Output>(
+    predicate: (value: Output) => value is Refined,
+    message?: string,
+  ): RefinementSchema<Schema<Output>, Refined>;
+  public refine(
+    predicate: (value: Output) => boolean,
+    message?: string,
+  ): RefinementSchema<Schema<Output>, Output>;
+  public refine(
+    predicate: (value: Output) => boolean,
+    message = "Failed custom validation",
+  ): RefinementSchema<Schema<Output>, Output> {
+    return new RefinementSchema(this, predicate, message);
+  }
+
+  public transform<Transformed>(
+    transformer: (value: Output) => Transformed,
+  ): TransformSchema<Schema<Output>, Transformed> {
+    return new TransformSchema(this, transformer);
+  }
+
   /** @internal Used by composable schemas. */
   public abstract _parse(
     input: unknown,
@@ -107,6 +140,13 @@ export class StringSchema extends Schema<string> {
       message,
       test: (value) => URL.canParse(value),
     });
+  }
+
+  public uuid(message = "Must be a valid UUID"): StringSchema {
+    return this.regex(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+      message,
+    );
   }
 
   public regex(pattern: RegExp, message = "Has an invalid format"): StringSchema {
@@ -234,6 +274,234 @@ export class BooleanSchema extends Schema<boolean> {
   }
 }
 
+export type LiteralValue = bigint | boolean | null | number | string;
+
+export class LiteralSchema<Value extends LiteralValue> extends Schema<Value> {
+  readonly #value: Value;
+
+  public constructor(value: Value) {
+    super();
+    this.#value = value;
+  }
+
+  public override _parse(
+    input: unknown,
+    context: ParseContext,
+  ): ParseResult<Value> {
+    if (!Object.is(input, this.#value)) {
+      addIssue(context, "invalid_value", `Expected ${formatLiteral(this.#value)}`);
+      return failure;
+    }
+
+    return success(this.#value);
+  }
+}
+
+export class EnumSchema<Values extends readonly [LiteralValue, ...LiteralValue[]]>
+  extends Schema<Values[number]>
+{
+  readonly #values: ReadonlySet<LiteralValue>;
+  readonly #description: string;
+
+  public constructor(values: Values) {
+    super();
+    const snapshot = Object.freeze([...values]) as unknown as Values;
+    this.#values = new Set(snapshot);
+    this.#description = snapshot.map(formatLiteral).join(", ");
+  }
+
+  public override _parse(
+    input: unknown,
+    context: ParseContext,
+  ): ParseResult<Values[number]> {
+    if (!this.#values.has(input as LiteralValue)) {
+      addIssue(context, "invalid_value", `Expected one of: ${this.#description}`);
+      return failure;
+    }
+
+    return success(input as Values[number]);
+  }
+}
+
+export class UnionSchema<
+  Members extends readonly [Schema<unknown>, Schema<unknown>, ...Schema<unknown>[]],
+> extends Schema<Infer<Members[number]>> {
+  readonly #members: Members;
+
+  public constructor(members: Members) {
+    super();
+    this.#members = Object.freeze([...members]) as unknown as Members;
+  }
+
+  public override _parse(
+    input: unknown,
+    context: ParseContext,
+  ): ParseResult<Infer<Members[number]>> {
+    for (const member of this.#members) {
+      const branchIssues: ValidationIssue[] = [];
+      const result = member._parse(input, {
+        issues: branchIssues,
+        path: context.path,
+      });
+
+      if (result.success) {
+        return result as ParseSuccess<Infer<Members[number]>>;
+      }
+    }
+
+    addIssue(context, "invalid_union", "Input does not match any union member");
+    return failure;
+  }
+}
+
+export type DateOptions = CoercionOptions;
+
+interface DateLimits {
+  readonly maximum?: number;
+  readonly maximumMessage?: string;
+  readonly minimum?: number;
+  readonly minimumMessage?: string;
+}
+
+export class DateSchema extends Schema<Date> {
+  readonly #coerce: boolean;
+  readonly #maximum?: number;
+  readonly #maximumMessage?: string;
+  readonly #minimum?: number;
+  readonly #minimumMessage?: string;
+
+  public constructor(
+    options: DateOptions = {},
+    limits: DateLimits = {},
+  ) {
+    super();
+    this.#coerce = options.coerce ?? true;
+    this.#maximum = limits.maximum;
+    this.#maximumMessage = limits.maximumMessage;
+    this.#minimum = limits.minimum;
+    this.#minimumMessage = limits.minimumMessage;
+  }
+
+  public min(minimum: Date, message?: string): DateSchema {
+    const timestamp = assertValidDate(minimum, "Date minimum");
+    return new DateSchema(
+      { coerce: this.#coerce },
+      {
+        maximum: this.#maximum,
+        maximumMessage: this.#maximumMessage,
+        minimum: timestamp,
+        minimumMessage: message ?? `Must be on or after ${minimum.toISOString()}`,
+      },
+    );
+  }
+
+  public max(maximum: Date, message?: string): DateSchema {
+    const timestamp = assertValidDate(maximum, "Date maximum");
+    return new DateSchema(
+      { coerce: this.#coerce },
+      {
+        maximum: timestamp,
+        maximumMessage: message ?? `Must be on or before ${maximum.toISOString()}`,
+        minimum: this.#minimum,
+        minimumMessage: this.#minimumMessage,
+      },
+    );
+  }
+
+  public override _parse(input: unknown, context: ParseContext): ParseResult<Date> {
+    const value = parseDate(input, this.#coerce);
+
+    if (!value) {
+      addIssue(context, "invalid_type", "Expected a valid date");
+      return failure;
+    }
+
+    if (this.#minimum !== undefined && value.getTime() < this.#minimum) {
+      addIssue(context, "too_small", this.#minimumMessage ?? "Date is too early");
+      return failure;
+    }
+
+    if (this.#maximum !== undefined && value.getTime() > this.#maximum) {
+      addIssue(context, "too_big", this.#maximumMessage ?? "Date is too late");
+      return failure;
+    }
+
+    return success(value);
+  }
+}
+
+interface FileRule {
+  readonly code: ValidationIssueCode;
+  readonly message: string;
+  readonly test: (value: Blob) => boolean;
+}
+
+export class FileSchema extends Schema<Blob> {
+  readonly #rules: readonly FileRule[];
+
+  public constructor(rules: readonly FileRule[] = []) {
+    super();
+    this.#rules = rules;
+  }
+
+  public min(size: number, message = `File must contain at least ${size} bytes`): FileSchema {
+    assertNonNegativeInteger(size, "File minimum size");
+    return this.withRule({
+      code: "too_small",
+      message,
+      test: (value) => value.size >= size,
+    });
+  }
+
+  public max(size: number, message = `File must contain at most ${size} bytes`): FileSchema {
+    assertNonNegativeInteger(size, "File maximum size");
+    return this.withRule({
+      code: "too_big",
+      message,
+      test: (value) => value.size <= size,
+    });
+  }
+
+  public mime(
+    types: string | readonly string[],
+    message = "File has an unsupported media type",
+  ): FileSchema {
+    const allowed = typeof types === "string" ? [types] : [...types];
+
+    if (allowed.length === 0 || allowed.some((type) => type.trim().length === 0)) {
+      throw new TypeError("File MIME types must contain at least one non-empty value");
+    }
+
+    return this.withRule({
+      code: "invalid_format",
+      message,
+      test: (value) => allowed.some((type) => matchesMime(value.type, type)),
+    });
+  }
+
+  public override _parse(input: unknown, context: ParseContext): ParseResult<Blob> {
+    if (!(input instanceof Blob)) {
+      addIssue(context, "invalid_type", "Expected a file");
+      return failure;
+    }
+
+    let valid = true;
+
+    for (const rule of this.#rules) {
+      if (!rule.test(input)) {
+        addIssue(context, rule.code, rule.message);
+        valid = false;
+      }
+    }
+
+    return valid ? success(input) : failure;
+  }
+
+  private withRule(rule: FileRule): FileSchema {
+    return new FileSchema([...this.#rules, rule]);
+  }
+}
+
 export class ArraySchema<ItemSchema extends Schema<unknown>> extends Schema<
   Infer<ItemSchema>[]
 > {
@@ -328,6 +596,10 @@ export type ObjectOutput<Shape extends ObjectShape> = Simplify<
   }
 >;
 
+export type PartialObjectShape<Shape extends ObjectShape> = {
+  readonly [Key in keyof Shape]: OptionalSchema<Shape[Key]>;
+};
+
 export class ObjectSchema<Shape extends ObjectShape> extends Schema<
   ObjectOutput<Shape>
 > {
@@ -336,6 +608,22 @@ export class ObjectSchema<Shape extends ObjectShape> extends Schema<
   public constructor(shape: Shape) {
     super();
     this.#shape = Object.freeze({ ...shape }) as Shape;
+  }
+
+  public partial(): ObjectSchema<PartialObjectShape<Shape>> {
+    const partialShape: Record<string, OptionalSchema<Schema<unknown>>> = {};
+
+    for (const key of Object.keys(this.#shape)) {
+      const definition = this.#shape[key];
+
+      if (definition) {
+        partialShape[key] = new OptionalSchema(definition);
+      }
+    }
+
+    return new ObjectSchema(
+      partialShape as PartialObjectShape<Shape>,
+    );
   }
 
   public override _parse(
@@ -398,6 +686,127 @@ export class OptionalSchema<Inner extends Schema<unknown>> extends Schema<
   }
 }
 
+export class NullableSchema<Inner extends Schema<unknown>> extends Schema<
+  Infer<Inner> | null
+> {
+  readonly #inner: Inner;
+
+  public constructor(inner: Inner) {
+    super();
+    this.#inner = inner;
+  }
+
+  public override _parse(
+    input: unknown,
+    context: ParseContext,
+  ): ParseResult<Infer<Inner> | null> {
+    return input === null
+      ? success(null)
+      : (this.#inner._parse(input, context) as ParseResult<Infer<Inner>>);
+  }
+}
+
+export class DefaultSchema<Inner extends Schema<unknown>> extends Schema<
+  Exclude<Infer<Inner>, undefined>
+> {
+  readonly #defaultValue:
+    | Exclude<Infer<Inner>, undefined>
+    | (() => Exclude<Infer<Inner>, undefined>);
+  readonly #inner: Inner;
+
+  public constructor(
+    inner: Inner,
+    defaultValue:
+      | Exclude<Infer<Inner>, undefined>
+      | (() => Exclude<Infer<Inner>, undefined>),
+  ) {
+    super();
+    this.#inner = inner;
+    this.#defaultValue = defaultValue;
+  }
+
+  public override _parse(
+    input: unknown,
+    context: ParseContext,
+  ): ParseResult<Exclude<Infer<Inner>, undefined>> {
+    const value = input === undefined
+      ? typeof this.#defaultValue === "function"
+        ? (this.#defaultValue as () => Exclude<Infer<Inner>, undefined>)()
+        : this.#defaultValue
+      : input;
+
+    return this.#inner._parse(value, context) as ParseResult<
+      Exclude<Infer<Inner>, undefined>
+    >;
+  }
+}
+
+export class RefinementSchema<
+  Inner extends Schema<unknown>,
+  Refined extends Infer<Inner>,
+> extends Schema<Refined> {
+  readonly #inner: Inner;
+  readonly #message: string;
+  readonly #predicate: (value: Infer<Inner>) => boolean;
+
+  public constructor(
+    inner: Inner,
+    predicate: (value: Infer<Inner>) => boolean,
+    message: string,
+  ) {
+    super();
+    this.#inner = inner;
+    this.#predicate = predicate;
+    this.#message = message;
+  }
+
+  public override _parse(
+    input: unknown,
+    context: ParseContext,
+  ): ParseResult<Refined> {
+    const result = this.#inner._parse(input, context);
+
+    if (!result.success) {
+      return failure;
+    }
+
+    if (!this.#predicate(result.value as Infer<Inner>)) {
+      addIssue(context, "invalid_value", this.#message);
+      return failure;
+    }
+
+    return success(result.value as Refined);
+  }
+}
+
+export class TransformSchema<
+  Inner extends Schema<unknown>,
+  Transformed,
+> extends Schema<Transformed> {
+  readonly #inner: Inner;
+  readonly #transformer: (value: Infer<Inner>) => Transformed;
+
+  public constructor(
+    inner: Inner,
+    transformer: (value: Infer<Inner>) => Transformed,
+  ) {
+    super();
+    this.#inner = inner;
+    this.#transformer = transformer;
+  }
+
+  public override _parse(
+    input: unknown,
+    context: ParseContext,
+  ): ParseResult<Transformed> {
+    const result = this.#inner._parse(input, context);
+
+    return result.success
+      ? success(this.#transformer(result.value as Infer<Inner>))
+      : failure;
+  }
+}
+
 export function string(): StringSchema {
   return new StringSchema();
 }
@@ -408,6 +817,40 @@ export function number(options?: CoercionOptions): NumberSchema {
 
 export function boolean(options?: CoercionOptions): BooleanSchema {
   return new BooleanSchema(options);
+}
+
+export function literal<const Value extends LiteralValue>(
+  value: Value,
+): LiteralSchema<Value> {
+  return new LiteralSchema(value);
+}
+
+export function enumeration<
+  const Values extends readonly [LiteralValue, ...LiteralValue[]],
+>(values: Values): EnumSchema<Values> {
+  return new EnumSchema(values);
+}
+
+export function union<
+  const Members extends readonly [
+    Schema<unknown>,
+    Schema<unknown>,
+    ...Schema<unknown>[],
+  ],
+>(members: Members): UnionSchema<Members> {
+  return new UnionSchema(members);
+}
+
+export function date(options?: DateOptions): DateSchema {
+  return new DateSchema(options);
+}
+
+export function uuid(): StringSchema {
+  return new StringSchema().uuid();
+}
+
+export function file(): FileSchema {
+  return new FileSchema();
 }
 
 export function array<ItemSchema extends Schema<unknown>>(
@@ -426,6 +869,12 @@ export function optional<Inner extends Schema<unknown>>(
   inner: Inner,
 ): OptionalSchema<Inner> {
   return new OptionalSchema(inner);
+}
+
+export function nullable<Inner extends Schema<unknown>>(
+  inner: Inner,
+): NullableSchema<Inner> {
+  return new NullableSchema(inner);
 }
 
 function success<Output>(value: Output): ParseSuccess<Output> {
@@ -488,6 +937,90 @@ function coerceBoolean(input: unknown): unknown {
   return input;
 }
 
+function parseDate(input: unknown, coerce: boolean): Date | undefined {
+  if (input instanceof Date) {
+    return Number.isFinite(input.getTime())
+      ? new Date(input.getTime())
+      : undefined;
+  }
+
+  if (!coerce || typeof input !== "string") {
+    return undefined;
+  }
+
+  const value = input.trim();
+  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+
+  if (dateOnly) {
+    const year = Number(dateOnly[1]);
+    const month = Number(dateOnly[2]);
+    const day = Number(dateOnly[3]);
+
+    return isValidCalendarDate(year, month, day)
+      ? new Date(`${value}T00:00:00.000Z`)
+      : undefined;
+  }
+
+  const dateTime = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d{1,9})?)?(?:Z|[+-](\d{2}):(\d{2}))$/.exec(
+    value,
+  );
+
+  if (!dateTime) {
+    return undefined;
+  }
+
+  const year = Number(dateTime[1]);
+  const month = Number(dateTime[2]);
+  const day = Number(dateTime[3]);
+  const hour = Number(dateTime[4]);
+  const minute = Number(dateTime[5]);
+  const second = dateTime[6] === undefined ? 0 : Number(dateTime[6]);
+  const offsetHour = dateTime[7] === undefined ? 0 : Number(dateTime[7]);
+  const offsetMinute = dateTime[8] === undefined ? 0 : Number(dateTime[8]);
+
+  if (
+    !isValidCalendarDate(year, month, day) ||
+    hour > 23 ||
+    minute > 59 ||
+    second > 59 ||
+    offsetHour > 23 ||
+    offsetMinute > 59
+  ) {
+    return undefined;
+  }
+
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) ? new Date(timestamp) : undefined;
+}
+
+function isValidCalendarDate(year: number, month: number, day: number): boolean {
+  if (month < 1 || month > 12 || day < 1) {
+    return false;
+  }
+
+  const leapYear = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const days = [31, leapYear ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+
+  return day <= (days[month - 1] ?? 0);
+}
+
+function matchesMime(actual: string, expected: string): boolean {
+  const normalizedActual = actual.toLowerCase();
+  const normalizedExpected = expected.trim().toLowerCase();
+
+  return normalizedExpected.endsWith("/*")
+    ? normalizedActual.startsWith(normalizedExpected.slice(0, -1))
+    : normalizedActual === normalizedExpected;
+}
+
+function formatLiteral(value: LiteralValue): string {
+  if (typeof value === "string") {
+    return JSON.stringify(value);
+  }
+
+  return typeof value === "bigint" ? `${value}n` : String(value);
+}
+
 function isObject(input: unknown): input is Record<string, unknown> {
   return typeof input === "object" && input !== null && !Array.isArray(input);
 }
@@ -502,4 +1035,12 @@ function assertFinite(value: number, label: string): void {
   if (!Number.isFinite(value)) {
     throw new RangeError(`${label} must be finite`);
   }
+}
+
+function assertValidDate(value: Date, label: string): number {
+  if (!(value instanceof Date) || !Number.isFinite(value.getTime())) {
+    throw new RangeError(`${label} must be a valid date`);
+  }
+
+  return value.getTime();
 }

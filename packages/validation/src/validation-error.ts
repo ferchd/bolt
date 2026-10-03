@@ -1,6 +1,7 @@
 export type ValidationIssueCode =
   | "invalid_format"
   | "invalid_type"
+  | "invalid_union"
   | "invalid_value"
   | "too_big"
   | "too_small";
