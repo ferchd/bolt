@@ -14,7 +14,8 @@ packages/
 ├── http/         Contexto, respuestas y errores HTTP
 ├── kernel/       Aplicación, ciclo de vida e integración HTTP con Bun
 ├── logger/       Logs legibles o estructurados con contexto
-└── router/       Definición y compilación de rutas
+├── router/       Definición y compilación de rutas
+└── validation/   Esquemas pequeños para validar entradas
 
 examples/
 ├── empty/        Aplicación Bolt mínima, sin rutas
@@ -142,6 +143,30 @@ router.post("/accounts", async (context) => {
 Los errores esperados conservan su status y código. Los errores inesperados se
 convierten en una respuesta JSON `500`; fuera de desarrollo nunca incluyen el
 mensaje interno ni el stack trace.
+
+## Validación
+
+Los esquemas son composables, infieren su tipo y se conectan directamente al
+contexto HTTP:
+
+```ts
+import v from "@bolt/validation";
+
+const accountSchema = v.object({
+  age: v.number().integer().min(18),
+  email: v.string().email(),
+  nickname: v.string().min(2).optional(),
+});
+
+router.post("/accounts", async (context) => {
+  const input = await context.validate.body(accountSchema);
+  return { account: input };
+});
+```
+
+También están disponibles `context.validate.query()` y
+`context.validate.params()`. Los errores se agregan con paths deterministas y
+se responden como `422 VALIDATION_ERROR`; JSON malformado produce `400`.
 
 ## Logs
 

@@ -24,6 +24,7 @@
         "@bolt/config": "workspace:*",
         "@bolt/kernel": "workspace:*",
         "@bolt/router": "workspace:*",
+        "@bolt/validation": "workspace:*",
       },
     },
     "packages/config": {
@@ -33,6 +34,9 @@
     "packages/http": {
       "name": "@bolt/http",
       "version": "0.0.0",
+      "dependencies": {
+        "@bolt/validation": "workspace:*",
+      },
     },
     "packages/kernel": {
       "name": "@bolt/kernel",

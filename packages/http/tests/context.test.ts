@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { HttpContext } from "../src/index.ts";
+import v from "@bolt/validation";
 
 const route = { method: "POST", name: "users.store", path: "/users/:id" };
 
@@ -34,5 +35,34 @@ describe("HttpContext", () => {
     const body = await context.json<{ name: string }>();
 
     expect(body.name).toBe("Ada");
+  });
+
+  test("validates body, query and route parameters", async () => {
+    const request = new Request(
+      "http://localhost/users/42?active=true&role=admin&role=author",
+      {
+        body: JSON.stringify({ email: "ada@example.com" }),
+        method: "POST",
+      },
+    );
+    const context = new HttpContext(request, {
+      params: { id: "42" },
+      route,
+    });
+
+    expect(
+      await context.validate.body(v.object({ email: v.string().email() })),
+    ).toEqual({ email: "ada@example.com" });
+    expect(
+      context.validate.query(
+        v.object({
+          active: v.boolean(),
+          role: v.array(v.string()),
+        }),
+      ),
+    ).toEqual({ active: true, role: ["admin", "author"] });
+    expect(
+      context.validate.params(v.object({ id: v.number().integer() })),
+    ).toEqual({ id: 42 });
   });
 });

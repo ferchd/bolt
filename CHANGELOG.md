@@ -23,6 +23,10 @@ y el proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
   y redacción automática de campos sensibles.
 - `BoltApplication` registra su ciclo de vida y los errores HTTP inesperados
   mediante un logger disponible sin configuración adicional.
+- Se incorporó `@bolt/validation` con esquemas composables, inferencia de tipos,
+  coerción conservadora y errores con paths deterministas.
+- El contexto HTTP ahora ofrece `validate.body`, `validate.query` y
+  `validate.params`, devolviendo errores `400` o `422` estables.
 - Se incorporó `@bolt/kernel` como primer paquete del framework.
 - Se añadió un ciclo de vida extensible con servicios que arrancan en orden, se
   detienen en orden inverso y se revierten cuando falla el inicio.

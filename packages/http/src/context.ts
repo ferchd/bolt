@@ -1,3 +1,5 @@
+import { RequestValidator } from "./request-validator.ts";
+
 export interface RouteInfo {
   readonly method: string;
   readonly name?: string;
@@ -15,6 +17,7 @@ export class HttpContext {
   public readonly cookies: Bun.CookieMap;
   public readonly params: Readonly<Record<string, string>>;
   public readonly route: RouteInfo;
+  public readonly validate: RequestValidator;
 
   public constructor(
     public readonly request: Request,
@@ -24,6 +27,7 @@ export class HttpContext {
     this.cookies = getCookies(request);
     this.params = options.params ?? {};
     this.route = options.route;
+    this.validate = new RequestValidator(this);
   }
 
   public get query(): URLSearchParams {

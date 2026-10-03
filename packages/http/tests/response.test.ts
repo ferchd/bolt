@@ -2,10 +2,12 @@ import { describe, expect, test } from "bun:test";
 
 import {
   abort,
+  HttpContext,
   HttpError,
   toErrorResponse,
   toResponse,
 } from "../src/index.ts";
+import v from "@bolt/validation";
 
 describe("HTTP responses", () => {
   test("normalizes common handler results", async () => {
@@ -55,5 +57,39 @@ describe("HTTP responses", () => {
   test("provides an abort helper", () => {
     expect(() => abort(404, "User not found")).toThrow(HttpError);
     expect(() => new HttpError(200, "Not an error")).toThrow(RangeError);
+  });
+
+  test("turns validation failures into stable HTTP errors", async () => {
+    const context = new HttpContext(
+      new Request("http://localhost/users", {
+        body: JSON.stringify({ email: "invalid" }),
+        method: "POST",
+      }),
+      { route: { method: "POST", path: "/users" } },
+    );
+
+    try {
+      await context.validate.body(v.object({ email: v.string().email() }));
+      throw new Error("Expected validation to fail");
+    } catch (error) {
+      const response = toErrorResponse(error);
+
+      expect(response.status).toBe(422);
+      expect(await response.json()).toEqual({
+        error: {
+          code: "VALIDATION_ERROR",
+          details: {
+            issues: [
+              {
+                code: "invalid_format",
+                message: "Must be a valid email address",
+                path: ["email"],
+              },
+            ],
+          },
+          message: "The request is invalid",
+        },
+      });
+    }
   });
 });

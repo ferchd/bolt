@@ -3,6 +3,11 @@ import { resolve } from "node:path";
 import env from "@bolt/config";
 import { abort, BoltApplication } from "@bolt/kernel";
 import router from "@bolt/router";
+import v from "@bolt/validation";
+
+const credentialsSchema = v.object({
+  email: v.string().email(),
+});
 
 router.static("/assets", resolve(import.meta.dir, "../public"));
 
@@ -22,10 +27,10 @@ router
       created: true,
     }));
     router.post("login", async (context) => {
-      const credentials = await context.json<{ email?: string }>();
+      const credentials = await context.validate.body(credentialsSchema);
 
-      if (!credentials.email) {
-        abort(422, "Email is required", { code: "INVALID_CREDENTIALS" });
+      if (credentials.email.endsWith("@blocked.test")) {
+        abort(422, "Email is not allowed", { code: "INVALID_CREDENTIALS" });
       }
 
       return { authenticated: true };
