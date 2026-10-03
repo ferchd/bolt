@@ -30,6 +30,10 @@
       "name": "@bolt/config",
       "version": "0.0.0",
     },
+    "packages/http": {
+      "name": "@bolt/http",
+      "version": "0.0.0",
+    },
     "packages/kernel": {
       "name": "@bolt/kernel",
       "version": "0.0.0",
@@ -48,6 +52,8 @@
     "@bolt/example-empty": ["@bolt/example-empty@workspace:examples/empty"],
 
     "@bolt/example-routing": ["@bolt/example-routing@workspace:examples/routing"],
+
+    "@bolt/http": ["@bolt/http@workspace:packages/http"],
 
     "@bolt/kernel": ["@bolt/kernel@workspace:packages/kernel"],
 
