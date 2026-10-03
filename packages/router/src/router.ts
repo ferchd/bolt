@@ -55,13 +55,23 @@ export class Router {
   }
 
   public group(callback: () => void): RouteGroup {
+    if (isAsyncFunction(callback)) {
+      throw new TypeError("Router group callbacks must be synchronous");
+    }
+
     const nodes: RoutableNode[] = [];
     this.#scopes.push(nodes);
+    let result: unknown;
 
     try {
-      callback();
+      result = callback();
     } finally {
       this.#scopes.pop();
+    }
+
+    if (isPromiseLike(result)) {
+      void Promise.resolve(result).catch(() => undefined);
+      throw new TypeError("Router group callbacks must be synchronous");
     }
 
     const group = new RouteGroup(nodes);
@@ -114,6 +124,12 @@ export class Router {
       }
 
       if (node instanceof StaticRoute) {
+        if (context.middleware.length > 0) {
+          throw new TypeError(
+            "Static routes cannot inherit middleware; use a dynamic route when access control is required",
+          );
+        }
+
         const path = toStaticPath(joinPaths(context.pathPrefix, node.path));
 
         if (table[path]) {
@@ -190,4 +206,17 @@ function toStaticPath(path: string): string {
   }
 
   return path === "/" ? "/*" : `${path}/*`;
+}
+
+function isAsyncFunction(callback: () => void): boolean {
+  return callback.constructor.name === "AsyncFunction";
+}
+
+function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
+  return (
+    (typeof value === "object" || typeof value === "function") &&
+    value !== null &&
+    "then" in value &&
+    typeof value.then === "function"
+  );
 }

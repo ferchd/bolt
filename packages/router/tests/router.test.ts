@@ -80,6 +80,18 @@ describe("Router", () => {
     ]);
   });
 
+  test("rejects asynchronous group callbacks before changing scope", () => {
+    const router = Router.create();
+
+    expect(() =>
+      router.group(async () => {
+        router.get("inside", () => "inside");
+      }),
+    ).toThrow("Router group callbacks must be synchronous");
+
+    expect(router.compile()).toEqual({});
+  });
+
   test("preserves controller handlers for the HTTP dispatcher", () => {
     const router = Router.create();
 
@@ -117,6 +129,21 @@ describe("Router", () => {
       .prefix("web");
 
     expect(router.compile()["/web/assets/*"]?.directory).toBe("./public");
+  });
+
+  test("rejects middleware that cannot protect native static routes", () => {
+    const router = Router.create();
+
+    router
+      .group(() => {
+        router.static("assets", "./private");
+      })
+      .prefix("account")
+      .use(() => undefined);
+
+    expect(() => router.compile()).toThrow(
+      "Static routes cannot inherit middleware",
+    );
   });
 
   test("rejects empty static directories and duplicate paths", () => {
