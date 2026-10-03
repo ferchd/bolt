@@ -7,6 +7,16 @@ export type {
   RouteInfo,
 } from "@bolt/http";
 
+export { Logger } from "@bolt/logger";
+
+export type {
+  LogContext,
+  LogFormat,
+  LogLevel,
+  LoggerOptions,
+  LogWriter,
+} from "@bolt/logger";
+
 export { BoltApplication } from "./application.ts";
 
 export type { ApplicationOptions } from "./application.ts";

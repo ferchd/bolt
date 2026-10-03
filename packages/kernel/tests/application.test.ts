@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { BoltApplication } from "../src/index.ts";
+import { BoltApplication, Logger } from "../src/index.ts";
 import type { ApplicationService } from "../src/index.ts";
 
 describe("BoltApplication", () => {
@@ -87,6 +87,30 @@ describe("BoltApplication", () => {
     expect(() => application?.use({})).toThrow(
       "Services can only be registered while Bolt is stopped",
     );
+  });
+
+  test("logs application lifecycle events", async () => {
+    const output: string[] = [];
+    const logger = Logger.create({
+      format: "json",
+      level: "info",
+      writer: (line) => output.push(line),
+    });
+    application = BoltApplication.create({ logger, port: 0 });
+
+    await application.start();
+    await application.stop();
+
+    expect(output.map((line) => JSON.parse(line))).toEqual([
+      expect.objectContaining({
+        level: "info",
+        message: "Application started",
+      }),
+      expect.objectContaining({
+        level: "info",
+        message: "Application stopped",
+      }),
+    ]);
   });
 });
 

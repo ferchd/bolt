@@ -33,5 +33,3 @@ router
 const application = BoltApplication.create({ router });
 
 await application.start();
-
-console.log(`Bolt is running at ${application.url}`);

@@ -1,4 +1,5 @@
-import { toErrorResponse } from "@bolt/http";
+import { HttpError, toErrorResponse } from "@bolt/http";
+import logger, { type Logger } from "@bolt/logger";
 import router, { type Router } from "@bolt/router";
 
 import { compileBunRoutes } from "./dispatcher.ts";
@@ -10,6 +11,7 @@ import type {
 export interface ApplicationOptions {
   readonly development?: Bun.Serve.Development;
   readonly hostname?: string;
+  readonly logger?: Logger;
   readonly port?: number;
   readonly router?: Router;
 }
@@ -20,8 +22,11 @@ export class BoltApplication {
   #server?: Bun.Server<undefined>;
   #state: ApplicationState = "stopped";
 
+  public readonly logger: Logger;
+
   private constructor(options: ApplicationOptions) {
     this.#options = options;
+    this.logger = options.logger ?? logger;
   }
 
   public static create(options: ApplicationOptions = {}): BoltApplication {
@@ -79,16 +84,14 @@ export class BoltApplication {
 
       this.#server = Bun.serve({
         development: this.#options.development,
-        error: (error) =>
-          toErrorResponse(error, {
-            development: isDevelopment(this.#options.development),
-          }),
+        error: (error) => this.handleError(error),
         fetch: () => new Response(null, { status: 404 }),
         hostname: this.#options.hostname,
         port: this.#options.port,
         routes: compileBunRoutes((this.#options.router ?? router).compile()),
       });
       this.#state = "running";
+      this.logger.info("Application started", { url: this.url.href });
     } catch (error) {
       await this.stopServer();
       const rollbackErrors = await this.stopServices(started);
@@ -131,6 +134,23 @@ export class BoltApplication {
     if (errors.length > 0) {
       throw new AggregateError(errors, "Bolt failed to stop cleanly");
     }
+
+    this.logger.info("Application stopped");
+  }
+
+  private handleError(error: Error): Response {
+    if (error instanceof HttpError) {
+      this.logger.warn("Request rejected", {
+        code: error.code,
+        status: error.status,
+      });
+    } else {
+      this.logger.error("Unhandled request error", { error });
+    }
+
+    return toErrorResponse(error, {
+      development: isDevelopment(this.#options.development),
+    });
   }
 
   private getServer(): Bun.Server<undefined> {

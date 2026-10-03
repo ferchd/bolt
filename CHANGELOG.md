@@ -19,6 +19,10 @@ y el proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
   ocultación de detalles internos fuera del entorno de desarrollo.
 - Los callbacks y middleware del router ahora reciben tipos concretos para el
   contexto y la continuación de la cadena.
+- Se incorporó `@bolt/logger` con niveles, salida legible o JSON, contexto hijo
+  y redacción automática de campos sensibles.
+- `BoltApplication` registra su ciclo de vida y los errores HTTP inesperados
+  mediante un logger disponible sin configuración adicional.
 - Se incorporó `@bolt/kernel` como primer paquete del framework.
 - Se añadió un ciclo de vida extensible con servicios que arrancan en orden, se
   detienen en orden inverso y se revierten cuando falla el inicio.

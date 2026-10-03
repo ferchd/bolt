@@ -13,6 +13,7 @@ packages/
 ├── config/       Acceso tipado a las variables de entorno
 ├── http/         Contexto, respuestas y errores HTTP
 ├── kernel/       Aplicación, ciclo de vida e integración HTTP con Bun
+├── logger/       Logs legibles o estructurados con contexto
 └── router/       Definición y compilación de rutas
 
 examples/
@@ -130,6 +131,24 @@ router.post("/accounts", async (context) => {
 Los errores esperados conservan su status y código. Los errores inesperados se
 convierten en una respuesta JSON `500`; fuera de desarrollo nunca incluyen el
 mensaje interno ni el stack trace.
+
+## Logs
+
+Cada aplicación incluye un logger listo para usar:
+
+```ts
+application.logger.info("Account created", {
+  accountId: "account-1",
+});
+
+const requestLogger = application.logger.child({ requestId: "request-1" });
+requestLogger.warn("Slow request", { durationMs: 750 });
+```
+
+En desarrollo la salida es legible y en producción usa JSON por línea. Los
+campos sensibles comunes se redactan automáticamente. El nivel se puede cambiar
+con `LOG_LEVEL=debug`; durante las pruebas el logger predeterminado permanece
+silencioso.
 
 ## Servidor
 
