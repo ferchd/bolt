@@ -1,0 +1,9 @@
+services:
+  s3:
+    # Official Floci 1.5.8, pinned to the digest used for Bolt's integration validation.
+    image: floci/floci@sha256:dc779ef1e308016ef7d7fe85871c78d124b968a464c7f7f3d0dd57f0b7d44140
+    ports:
+      - "127.0.0.1:${BOLT_S3_TEST_PORT:-19083}:4566"
+    environment:
+      FLOCI_SERVICES_S3_ENFORCE_AUTH: "false"
+      FLOCI_STORAGE_MODE: memory
