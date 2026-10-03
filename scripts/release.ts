@@ -1,5 +1,6 @@
-import { readdirSync, readFileSync, writeFileSync, unlinkSync, existsSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { withPublishConfiguration } from "./release-config.ts";
 
 const root = resolve(import.meta.dir, "..");
 const registry = "https://gitlab.com/api/v4/projects/87197832/packages/npm/";
@@ -63,23 +64,17 @@ if (!Bun.argv.includes("--publish")) {
       !Bun.env["CI_JOB_TOKEN"]) {
     throw new Error("Publishing requires a protected matching release tag in the canonical GitLab project");
   }
-  for (const { directory, manifest } of ordered) {
-    const config = join(directory, ".npmrc");
-    if (existsSync(config)) throw new Error(`Refusing to replace package registry configuration: ${manifest.name}`);
-    // The file contains a variable reference, never the credential itself.
-    writeFileSync(config, `@bolt:registry=${registry}\n//gitlab.com/api/v4/projects/87197832/packages/npm/:_authToken=\${CI_JOB_TOKEN}\n`, { flag: "wx" });
-    try {
-      const child = Bun.spawn([process.execPath, "publish", "--ignore-scripts", "--registry", registry, ...(releaseVersion[4] ? ["--tag", "next"] : [])], {
+  await withPublishConfiguration(registry, async config => {
+    for (const { directory, manifest } of ordered) {
+      const child = Bun.spawn([process.execPath, "publish", "--ignore-scripts", `--config=${config}`, "--registry", registry, ...(releaseVersion[4] ? ["--tag", "next"] : [])], {
         cwd: directory,
         stdin: "ignore",
         stdout: "inherit",
         stderr: "inherit",
       });
       if (await child.exited !== 0) throw new Error(`Publishing failed for ${manifest.name}`);
-    } finally {
-      unlinkSync(config);
     }
-  }
+  });
 }
 
 function runtimeDependencies(manifest: Manifest): Record<string, string> {

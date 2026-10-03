@@ -16,7 +16,7 @@
     "example:persistence": "bun run --filter @bolt/example-persistence start",
     "typecheck": "tsc --noEmit -p tsconfig.json && bun run --workspaces --if-present typecheck",
     "test": "bun run --workspaces --if-present test",
-    "check": "bun run typecheck && bun run test",
+    "check": "bun run typecheck && bun run test && bun test scripts/tests",
     "verify:packages": "bun scripts/verify-packages.ts",
     "verify:registry": "bun scripts/verify-registry.ts",
     "release:check": "bun scripts/release.ts",
