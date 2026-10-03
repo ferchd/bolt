@@ -4,4 +4,4 @@ const application = BoltApplication.create();
 
 await application.start();
 
-console.log("Bolt application started");
+console.log(`Bolt is running at ${application.url}`);

@@ -10,8 +10,8 @@ Framework para Bun y TypeScript, organizado como un monorepo de Bun.
 
 ```text
 packages/
-├── kernel/       Ciclo de vida y arranque de una aplicación Bolt
-└── router/       Controladores y resolución de rutas
+├── kernel/       Aplicación, ciclo de vida e integración HTTP con Bun
+└── router/       Definición y compilación de rutas
 
 examples/
 ├── empty/        Aplicación Bolt mínima, sin rutas
@@ -30,7 +30,7 @@ Instala las dependencias exactas registradas en `bun.lock`:
 bun install --frozen-lockfile
 ```
 
-Arranca la aplicación vacía:
+Arranca la aplicación HTTP de ejemplo:
 
 ```bash
 bun run dev
@@ -55,12 +55,13 @@ const application = BoltApplication.create();
 
 await application.start();
 
-console.log("Bolt application started");
+console.log(`Bolt is running at ${application.url}`);
 ```
 
-Una aplicación vacía no abre puertos ni presupone un transporte. El kernel solo
-administra su ciclo de vida y permite detenerla de forma segura con
-`await application.stop()`.
+`BoltApplication.create()` construye la instancia sin efectos secundarios.
+`start()` abre el servidor Bun —aunque todavía no existan rutas— y `stop()` lo
+cierra de forma segura. Por defecto Bun escucha en el puerto `3000`; puedes
+configurarlo con `BoltApplication.create({ port: 8080 })`.
 
 ## Rutas
 
@@ -81,10 +82,32 @@ const routes = router.compile();
 ```
 
 El router compila la sintaxis declarativa en una tabla por path y método. No
-realiza matching durante una petición ni depende de un servidor. Un adaptador
-posterior podrá transformar esta tabla en el objeto requerido por Bun.
+realiza matching durante una petición ni depende del servidor; el kernel
+transforma esa tabla en las rutas nativas de Bun al iniciar la aplicación.
 
 Puedes ejecutar el ejemplo con `bun run example:routing`.
+
+## Servidor
+
+```ts
+import { BoltApplication } from "@bolt/kernel";
+import router from "@bolt/router";
+
+const application = BoltApplication.create({
+  hostname: "127.0.0.1",
+  port: 3000,
+  router,
+});
+
+await application.start();
+
+console.log(`Bolt is running at ${application.url}`);
+```
+
+No existe una segunda instancia `BoltServer`: la aplicación posee el servidor y
+expone su `url` y `port` después de arrancar. Los servicios adicionales
+registrados con `use()` conservan su ciclo de vida ordenado alrededor del
+servidor.
 
 La configuración se basa en la documentación oficial de
 [Bun](https://bun.com/docs), incluyendo las recomendaciones para

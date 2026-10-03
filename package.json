@@ -8,8 +8,9 @@
     "examples/*"
   ],
   "scripts": {
-    "dev": "bun run --filter @bolt/example-empty dev",
-    "start": "bun run --filter @bolt/example-empty start",
+    "dev": "bun run --filter @bolt/example-routing dev",
+    "start": "bun run --filter @bolt/example-routing start",
+    "example:empty": "bun run --filter @bolt/example-empty start",
     "example:routing": "bun run --filter @bolt/example-routing start",
     "typecheck": "bun run --workspaces --if-present typecheck",
     "test": "bun run --workspaces --if-present test",
@@ -17,6 +18,7 @@
   },
   "devDependencies": {
     "@types/bun": "1.4.2",
+    "@typescript/lib-dom": "npm:@types/web@0.0.357",
     "typescript": "7.0.2"
   }
 }

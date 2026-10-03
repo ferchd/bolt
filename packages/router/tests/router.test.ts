@@ -80,7 +80,7 @@ describe("Router", () => {
     ]);
   });
 
-  test("preserves controller handlers for the server adapter", () => {
+  test("preserves controller handlers for the HTTP dispatcher", () => {
     const router = Router.create();
 
     class AccountsController {

@@ -1,3 +1,4 @@
+import { BoltApplication } from "@bolt/kernel";
 import router from "@bolt/router";
 
 router.get("/", () => ({ hello: "world" }));
@@ -10,4 +11,8 @@ router
   .prefix("/api/v1/auth")
   .as("auth");
 
-console.log(router.compile());
+const application = BoltApplication.create({ router });
+
+await application.start();
+
+console.log(`Bolt is running at ${application.url}`);

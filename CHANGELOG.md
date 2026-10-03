@@ -10,16 +10,24 @@ y el proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
 ### Añadido
 
 - Se incorporó `@bolt/kernel` como primer paquete del framework.
+- Se añadió un ciclo de vida extensible con servicios que arrancan en orden, se
+  detienen en orden inverso y se revierten cuando falla el inicio.
+- Se integró `Bun.serve` directamente en el ciclo de vida de
+  `BoltApplication`.
+- Se integró la tabla compilada del router con las rutas nativas de Bun al
+  iniciar la aplicación.
+- Se añadió ejecución de middleware, resolución de controladores por petición y
+  serialización automática de resultados HTTP.
 - Se incorporó `@bolt/router` con una API declarativa inspirada en AdonisJS.
 - Se añadieron rutas para los métodos HTTP comunes y handlers inline o basados
   en controladores.
 - Se añadieron grupos anidados con prefijos, nombres y middleware compartido.
 - Se añadió la compilación de definiciones en una tabla por path y método para
-  futuros adaptadores de servidor.
+  mantener el router separado del runtime HTTP.
 - Se añadió detección temprana de paths y nombres de ruta duplicados.
 - Se añadió `BoltApplication.create()` para construir aplicaciones Bolt.
-- Se implementó el ciclo de vida mínimo mediante `start()`, `stop()` e
-  `isRunning`, sin acoplar el kernel a un servidor o transporte.
+- Se implementó el ciclo de vida mediante `start()`, `stop()` e `isRunning`;
+  `start()` inicia el servidor y `stop()` lo detiene.
 - Se añadió una aplicación vacía en `examples/empty` que consume el kernel como
   dependencia local.
 - Se incorporaron pruebas para la creación, el inicio y la detención idempotente
