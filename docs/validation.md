@@ -1,4 +1,4 @@
-# Validación de Bolt 0.1.0
+# Validación de Bolt 0.1.1
 
 Registro de la implementación posterior a la [auditoría inicial](framework-readiness.md),
 realizada el 3 de octubre de 2026 con Bun 1.4.0 en Windows.
@@ -10,7 +10,7 @@ compiten por la misma versión. Estas comprobaciones prueban comportamientos
 concretos; no constituyen un benchmark de carga sostenida.
 
 La ejecución final contra los seis motores y Floci aprobó 286 pruebas, con
-1317 assertions y cero fallos. Se omitió una prueba de DDL implícitamente
+1334 assertions y cero fallos. Se omitió una prueba de DDL implícitamente
 confirmado porque ese comportamiento no corresponde a PostgreSQL. La
 comprobación TypeScript pasó en los 19 workspaces.
 
@@ -29,6 +29,13 @@ contra peticiones reales, incluyendo el hash del contenido y tokens de sesión.
 Esto no valida políticas IAM de AWS ni todas las variantes de endpoints S3.
 El disco local comprueba confinamiento de rutas, symlinks, publicación atómica,
 límites de tamaño y cancelación.
+
+La cancelación durante el inicio multipart recupera el ID con un plazo propio
+de 10 segundos y limpia únicamente esa sesión. Las regresiones retienen la
+respuesta de inicio o interrumpen una parte activa; comprueban cancelación del
+input, transporte y limpieza, con repeticiones en Windows y Linux. La pérdida
+de la respuesta por red o timeout todavía requiere lifecycle de uploads
+abandonados en el proveedor.
 
 El transporte ODBC usa drivers nativos instalados y requiere una plataforma
 compatible. La suite de protocolos prueba límites de conexiones y colas,
@@ -87,5 +94,5 @@ por cada paquete. CI ejecuta tipos, pruebas, instalación de tarballs, PostgreSQ
 MySQL, MariaDB y Floci. SQL Server y Oracle se validan con los drivers Windows;
 los jobs Linux no sustituyen esas pruebas. Antes de un despliegue se deben
 validar TLS, permisos, backups/restauración, límites y carga esperada en su
-infraestructura concreta. Bolt 0.1.0 permite construir la aplicación, pero aún
+infraestructura concreta. Bolt 0.1.1 permite construir la aplicación, pero aún
 no declara la estabilidad de una API 1.0 ni certifica cualquier despliegue.

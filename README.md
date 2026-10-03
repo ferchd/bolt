@@ -511,7 +511,7 @@ servidor y permite configurar TLS, `reusePort`, IPv6 e idle timeout mediante
 
 ## Estado y distribución
 
-La versión inicial es `0.1.0`. El origen canónico y el
+La versión inicial publicada es `0.1.1`. El origen canónico y el
 registry de paquetes son [GitLab](https://gitlab.com/ferchd/bolt). El registry
 usa el protocolo npm en GitLab; no se publican paquetes en npmjs.org.
 [GitHub](https://github.com/ferchd/bolt) queda destinado a contribuciones y

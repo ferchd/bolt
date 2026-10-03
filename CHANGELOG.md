@@ -5,7 +5,19 @@ Todos los cambios relevantes de Bolt se documentarán en este archivo.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/)
 y el proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
 
-## [0.1.0] - 2026-10-03
+## [0.1.1] - 2026-10-03
+
+### Corregido
+
+- Cancelar durante el inicio de una carga multipart espera de forma acotada
+  el identificador para abortar únicamente esa sesión y evitar cargas huérfanas.
+- El scaffold genera dependencias de la versión instalada del CLI.
+
+El tag `v0.1.0` se conserva para auditoría; sus paquetes no se publicaron al
+detectarse una carrera de cancelación en la validación final. `0.1.1` es la
+primera distribución validada.
+
+## [0.1.0] - 2026-10-03 (sin distribución)
 
 ### Añadido
 

@@ -63,7 +63,7 @@
     },
     "packages/auth": {
       "name": "@bolt/auth",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "dependencies": {
         "@bolt/database": "workspace:*",
         "@bolt/http": "workspace:*",
@@ -72,33 +72,33 @@
     },
     "packages/cli": {
       "name": "@bolt/cli",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "bin": {
         "bolt": "./src/bin.ts",
       },
     },
     "packages/config": {
       "name": "@bolt/config",
-      "version": "0.1.0",
+      "version": "0.1.1",
     },
     "packages/container": {
       "name": "@bolt/container",
-      "version": "0.1.0",
+      "version": "0.1.1",
     },
     "packages/database": {
       "name": "@bolt/database",
-      "version": "0.1.0",
+      "version": "0.1.1",
     },
     "packages/database-odbc": {
       "name": "@bolt/database-odbc",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "dependencies": {
         "@bolt/database": "workspace:*",
       },
     },
     "packages/http": {
       "name": "@bolt/http",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "dependencies": {
         "@bolt/container": "workspace:*",
         "@bolt/validation": "workspace:*",
@@ -106,7 +106,7 @@
     },
     "packages/kernel": {
       "name": "@bolt/kernel",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "dependencies": {
         "@bolt/container": "workspace:*",
         "@bolt/http": "workspace:*",
@@ -116,18 +116,18 @@
     },
     "packages/logger": {
       "name": "@bolt/logger",
-      "version": "0.1.0",
+      "version": "0.1.1",
     },
     "packages/orm": {
       "name": "@bolt/orm",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "dependencies": {
         "@bolt/database": "workspace:*",
       },
     },
     "packages/router": {
       "name": "@bolt/router",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "dependencies": {
         "@bolt/container": "workspace:*",
         "@bolt/http": "workspace:*",
@@ -135,15 +135,15 @@
     },
     "packages/security": {
       "name": "@bolt/security",
-      "version": "0.1.0",
+      "version": "0.1.1",
     },
     "packages/storage": {
       "name": "@bolt/storage",
-      "version": "0.1.0",
+      "version": "0.1.1",
     },
     "packages/testing": {
       "name": "@bolt/testing",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "dependencies": {
         "@bolt/kernel": "workspace:*",
       },
@@ -153,7 +153,7 @@
     },
     "packages/validation": {
       "name": "@bolt/validation",
-      "version": "0.1.0",
+      "version": "0.1.1",
     },
   },
   "packages": {
