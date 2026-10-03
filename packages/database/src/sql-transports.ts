@@ -108,8 +108,14 @@ class BunSqlTransport implements SqlTransport {
   constructor(options: SqlDatabaseOptions) {
     this.dialect = options.dialect;
     if (!options.url) throw new TypeError(`${options.dialect} requires a connection URL`);
+    const url = new URL(options.url);
     const expected = options.dialect === "postgresql" ? ["postgres:", "postgresql:"] : ["mysql:", "mysql2:", "mariadb:"];
-    if (!expected.includes(new URL(options.url).protocol)) throw new TypeError("Connection URL protocol does not match the database dialect");
+    if (!expected.includes(url.protocol)) throw new TypeError("Connection URL protocol does not match the database dialect");
+    // Bun 1.4 fails caching_sha2_password RSA authentication at 20 UTF-8 bytes.
+    // Keep credentials intact and require TLS; never retry with a truncated password.
+    if (options.dialect === "mysql" && options.allowPublicKeyRetrieval === true && !requiresTls(options, url) && Buffer.byteLength(decodeURIComponent(url.password), "utf8") >= 20) {
+      throw Object.assign(new TypeError("Bun MySQL RSA authentication requires TLS for passwords of 20 UTF-8 bytes or more. Configure required TLS with certificate verification."), { code: "BOLT_MYSQL_TLS_REQUIRED" });
+    }
     for (const key of ["maxConnections", "connectionTimeout", "idleTimeout"] as const) {
       const value = options[key];
       if (value !== undefined && (!Number.isSafeInteger(value) || value < (key === "maxConnections" ? 1 : 0))) throw new RangeError(`${key} has an invalid value`);
@@ -140,4 +146,11 @@ class BunSqlTransport implements SqlTransport {
       async release() { if (!released) { released = true; native.release(); } },
     };
   }
+}
+
+function requiresTls(options: SqlDatabaseOptions, url: URL): boolean {
+  const tls = options.tls;
+  // An explicit option takes precedence over a URL SSL mode in Bun.
+  if (tls !== undefined) return tls === true || typeof tls === "object" || tls === "require" || tls === "verify-ca" || tls === "verify-full";
+  return ["require", "verify-ca", "verify-full"].includes(url.searchParams.get("sslmode") ?? "");
 }

@@ -7,10 +7,12 @@ const engines: readonly { dialect: SqlDialect; env: string }[] = [
   { dialect: "mysql", env: "BOLT_MYSQL_TEST_URL" },
   { dialect: "mariadb", env: "BOLT_MARIADB_TEST_URL" },
 ];
+const mysqlTls = process.env["BOLT_MYSQL_TEST_TLS"];
+if (mysqlTls !== undefined && !["require", "verify-ca", "verify-full"].includes(mysqlTls)) throw new TypeError("BOLT_MYSQL_TEST_TLS must be require, verify-ca or verify-full");
 for (const { dialect, env } of engines) {
   const url = process.env[env];
   test.skipIf(!url)(`${dialect}: actual ORM CRUD, generated identities, query aggregation, optimistic locking, no-op updates and rollback`, async () => {
-    const db = SqlDatabase.create({ dialect, url: url!, maxConnections: 3, allowPublicKeyRetrieval: process.env["BOLT_MYSQL_TEST_ALLOW_PUBLIC_KEY_RETRIEVAL"] === "1" });
+    const db = SqlDatabase.create({ dialect, url: url!, ...(dialect === "mysql" && mysqlTls !== undefined ? { tls: mysqlTls as "require" | "verify-ca" | "verify-full" } : {}), maxConnections: 3, allowPublicKeyRetrieval: process.env["BOLT_MYSQL_TEST_ALLOW_PUBLIC_KEY_RETRIEVAL"] === "1" });
     const table = `orm_${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}`;
     interface Person { id: number; name: string; team: string; version: number; }
     const people = defineEntity<Person>({ table, columns: { id: { primaryKey: true, generated: true }, name: {}, team: {}, version: { version: true } } });

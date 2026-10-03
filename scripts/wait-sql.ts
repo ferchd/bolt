@@ -7,6 +7,8 @@ const configured = ([
   ["mariadb", "BOLT_MARIADB_TEST_URL"],
 ] as const).filter(([, environment]) => Boolean(Bun.env[environment]));
 if (!configured.length) throw new Error("At least one integration SQL URL is required");
+const mysqlTls = Bun.env["BOLT_MYSQL_TEST_TLS"];
+if (mysqlTls !== undefined && !["require", "verify-ca", "verify-full"].includes(mysqlTls)) throw new TypeError("BOLT_MYSQL_TEST_TLS must be require, verify-ca or verify-full");
 await Promise.all(configured.map(async ([dialect, environment]) => {
   const url = Bun.env[environment];
   if (!url) throw new Error(`Missing integration configuration: ${environment}`);
@@ -17,6 +19,7 @@ await Promise.all(configured.map(async ([dialect, environment]) => {
       dialect: dialect as SqlDialect,
       url,
       connectionTimeout: 2,
+      ...(dialect === "mysql" && mysqlTls !== undefined ? { tls: mysqlTls as "require" | "verify-ca" | "verify-full" } : {}),
       allowPublicKeyRetrieval: Bun.env["BOLT_MYSQL_TEST_ALLOW_PUBLIC_KEY_RETRIEVAL"] === "1",
     });
     try {
@@ -26,6 +29,7 @@ await Promise.all(configured.map(async ([dialect, environment]) => {
       return;
     } catch (error) {
       const details = sqlFailureDetails(error);
+      if (error && typeof error === "object" && "code" in error && error.code === "BOLT_MYSQL_TLS_REQUIRED") throw new Error(`${dialect} integration configuration requires TLS (${details})`);
       if (details !== previousFailure) {
         console.log(`${dialect} integration service is waiting (${details})`);
         previousFailure = details;

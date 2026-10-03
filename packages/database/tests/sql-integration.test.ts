@@ -6,11 +6,25 @@ const engines: readonly { dialect: SqlDialect; environment: string }[] = [
   { dialect: "mysql", environment: "BOLT_MYSQL_TEST_URL" },
   { dialect: "mariadb", environment: "BOLT_MARIADB_TEST_URL" },
 ];
+const mysqlTls = Bun.env["BOLT_MYSQL_TEST_TLS"];
+if (mysqlTls !== undefined && !["require", "verify-ca", "verify-full"].includes(mysqlTls)) throw new TypeError("BOLT_MYSQL_TEST_TLS must be require, verify-ca or verify-full");
+const mysqlUrl = Bun.env["BOLT_MYSQL_TEST_URL"];
+test.skipIf(!mysqlUrl || !mysqlTls || Buffer.byteLength(decodeURIComponent(new URL(mysqlUrl).password), "utf8") < 20)("real MySQL required TLS authenticates long caching_sha2 credentials and encrypts the session", async () => {
+  const db = SqlDatabase.create({ dialect: "mysql", url: mysqlUrl!, tls: mysqlTls as "require" | "verify-ca" | "verify-full", connectionTimeout: 5 });
+  await db.start();
+  try {
+    expect((await db.execute("SELECT 1 AS healthy")).rows).toEqual([{ healthy: 1 }]);
+    const { rows } = await db.execute<{ Variable_name: string; Value: string }>("SHOW SESSION STATUS LIKE 'Ssl_cipher'");
+    expect(rows[0]?.Variable_name).toBe("Ssl_cipher");
+    expect(rows[0]?.Value.length).toBeGreaterThan(0);
+  } finally { await db.close(); }
+}, 30000);
 for (const { dialect, environment } of engines) {
   const url = Bun.env[environment];
+  const tls = dialect === "mysql" && mysqlTls !== undefined ? mysqlTls as "require" | "verify-ca" | "verify-full" : undefined;
   describe(`real ${dialect} transport`, () => {
     test.skipIf(!url)("prepared parameters, generated IDs, transactions, savepoints and migration locks", async () => {
-      const db = SqlDatabase.create({ dialect, url: url!, maxConnections: 3, connectionTimeout: 5, allowPublicKeyRetrieval: Bun.env["BOLT_MYSQL_TEST_ALLOW_PUBLIC_KEY_RETRIEVAL"] === "1" });
+      const db = SqlDatabase.create({ dialect, url: url!, tls, maxConnections: 3, connectionTimeout: 5, allowPublicKeyRetrieval: Bun.env["BOLT_MYSQL_TEST_ALLOW_PUBLIC_KEY_RETRIEVAL"] === "1" });
       const suffix = crypto.randomUUID().replaceAll("-", "").slice(0, 12);
       const table = `bolt_items_${suffix}`;
       const migrationsTable = `bolt_m_${suffix}`;
@@ -51,7 +65,7 @@ for (const { dialect, environment } of engines) {
       }
     }, 30000);
     test.skipIf(!url || dialect === "postgresql")("implicit DDL commits leave a dirty record that blocks an unsafe retry", async () => {
-      const db = SqlDatabase.create({ dialect, url: url!, allowPublicKeyRetrieval: Bun.env["BOLT_MYSQL_TEST_ALLOW_PUBLIC_KEY_RETRIEVAL"] === "1" });
+      const db = SqlDatabase.create({ dialect, url: url!, tls, allowPublicKeyRetrieval: Bun.env["BOLT_MYSQL_TEST_ALLOW_PUBLIC_KEY_RETRIEVAL"] === "1" });
       const suffix = crypto.randomUUID().replaceAll("-", "").slice(0, 12);
       const table = `bolt_dirty_${suffix}`;
       const migrationsTable = `bolt_m_${suffix}`;

@@ -45,7 +45,7 @@ mysql_integration:
     - name: mysql:8.4.5
       alias: bolt-sql
   variables:
-    CI_DEBUG_SERVICES: 'true'
+    BOLT_MYSQL_TEST_TLS: require
     BOLT_MYSQL_TEST_URL: mysql://root:bolt_ci_test_password@bolt-sql:3306/bolt_test
 
 mariadb_integration:

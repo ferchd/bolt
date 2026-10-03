@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SqlConnections, SqlDatabase, SqlMigrator, SqlPostCommitError, sqlMigration, type SqlExecutor, type SqlTransport } from "../src/index.ts";
+import { createSqlTransport } from "../src/sql-transports.ts";
 
 function deferred() {
   let resolve!: () => void;
@@ -16,6 +17,45 @@ async function database() {
 }
 
 describe("async SQL persistence", () => {
+  test("rejects Bun's long MySQL RSA password path without leaking or changing credentials", async () => {
+    for (const password of ["12345678901234567890", "é".repeat(10)]) {
+      const url = `mysql://sensitive_user:${encodeURIComponent(password)}@invalid.invalid/bolt_test`;
+      for (const tls of [undefined, false, "disable", "allow", "prefer"] as const) {
+        const db = SqlDatabase.create({ dialect: "mysql", url, tls, allowPublicKeyRetrieval: true });
+        let caught: unknown;
+        try { await db.start(); } catch (error) { caught = error; }
+        expect(caught).toBeInstanceOf(TypeError);
+        const error = caught as TypeError & { code: string };
+        expect(error.code).toBe("BOLT_MYSQL_TLS_REQUIRED");
+        expect(error.message).toContain("TLS");
+        expect(error.message).not.toContain(password);
+        expect(error.message).not.toContain(encodeURIComponent(password));
+        expect(error.message).not.toContain("sensitive_user");
+        expect(error.message).not.toContain(url);
+        expect(db.state).toBe("stopped");
+      }
+    }
+  });
+  test("accepts 19 UTF-8 bytes, required TLS and unaffected provider configurations", async () => {
+    const long = `mysql://user:${encodeURIComponent("é".repeat(10))}@invalid.invalid/bolt_test`;
+    for (const password of ["1234567890123456789", `${"é".repeat(9)}x`]) {
+      const transport = createSqlTransport({ dialect: "mysql", url: `mysql://user:${encodeURIComponent(password)}@invalid.invalid/bolt_test`, allowPublicKeyRetrieval: true });
+      await transport.close();
+    }
+    for (const tls of [true, "require", "verify-ca", "verify-full", {}] as const) {
+      const transport = createSqlTransport({ dialect: "mysql", url: long, tls, allowPublicKeyRetrieval: true });
+      await transport.close();
+    }
+    for (const configuration of [
+      { dialect: "mysql" as const, url: long, allowPublicKeyRetrieval: false },
+      { dialect: "mariadb" as const, url: long, allowPublicKeyRetrieval: true },
+      { dialect: "mysql" as const, url: `${long}?sslmode=require`, allowPublicKeyRetrieval: true },
+    ]) {
+      const transport = createSqlTransport(configuration);
+      await transport.close();
+    }
+    expect(() => createSqlTransport({ dialect: "mysql", url: `${long}?sslmode=require`, tls: false, allowPublicKeyRetrieval: true })).toThrow("TLS");
+  });
   test("opens a relative SQLite filename in the current directory", async () => {
     const filename = `bolt-relative-${crypto.randomUUID()}.sqlite`;
     const db = SqlDatabase.create({ dialect: "sqlite", filename, wal: false });
