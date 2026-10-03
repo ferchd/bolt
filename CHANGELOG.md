@@ -9,6 +9,17 @@ y el proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
 
 ### Añadido
 
+- Se incorporó `@bolt/database` sobre `bun:sqlite`, con ciclo de vida,
+  statements tipados, transacciones, claves foráneas, busy timeout y WAL para
+  bases de datos persistentes.
+- Se añadieron migraciones forward-only, síncronas y transaccionales, ordenadas
+  por ID y registradas en `__bolt_migrations`.
+- Se incorporó `@bolt/testing` con un cliente HTTP que arranca aplicaciones en
+  puertos efímeros, construye query strings y cuerpos JSON, y respeta el
+  ownership del ciclo de vida.
+- Se añadió `examples/api`, una API CRUD de tareas que integra kernel, router,
+  configuración, validación, SQLite, migraciones y pruebas de extremo a
+  extremo.
 - Se incorporó `@bolt/config` con lectura tipada de strings, números, enteros,
   booleanos y conjuntos de valores desde el entorno cargado por Bun.
 - Se añadieron valores por defecto, detección de variables obligatorias y
@@ -57,6 +68,12 @@ y el proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
 
 ### Cambiado
 
+- El ejemplo API persistente es ahora el destino de `bun run dev` y
+  `bun run start`.
+- El kernel valida y compila las rutas antes de iniciar servicios, y registra
+  las señales de cierre mientras la aplicación todavía está arrancando.
+- Las pruebas de los ejemplos forman parte de la configuración TypeScript
+  compartida.
 - Las llamadas concurrentes a `start()` y `stop()` ahora comparten y ordenan
   sus transiciones sin iniciar o detener servicios más de una vez.
 - Los fallos durante el rollback de inicio conservan el error original junto
@@ -69,6 +86,15 @@ y el proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
   Bun.
 - La configuración compartida de TypeScript incluye explícitamente el código y
   las pruebas de todos los workspaces.
+
+### Corregido
+
+- Los callbacks asíncronos de grupos de rutas ahora se rechazan antes de que
+  puedan registrar rutas fuera de su prefijo o middleware.
+- Las rutas estáticas ya no pueden heredar middleware que el servidor nativo
+  no aplicaría silenciosamente.
+- El rollback de arranque elimina los listeners de señales incluso cuando
+  falla el destino de logs.
 
 ### Infraestructura inicial
 
