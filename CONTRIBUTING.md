@@ -10,11 +10,13 @@ en GitLab. Después se actualiza el mirror hacia GitHub. Los PR y comentarios no
 se sincronizan mediante Git. No fusionar cambios independientemente en ambos
 `main` ni ejecutar pipelines de contribuciones con credenciales de publicación.
 
-La política anterior está preparada localmente. Aún falta sincronizar el código
-con los remotos y habilitar el mirror en GitLab, en Settings → Repository →
-Mirroring repositories, con dirección push hacia GitHub y una credencial del
-mantenedor guardada en GitLab. Mantener una sola autoridad para ramas y tags;
-no almacenar esa credencial en el repositorio ni en los proyectos generados.
+El mirror push de GitLab hacia GitHub está habilitado y se verificó que `main`
+coincide en ambos repositorios. Usa una clave SSH administrada por GitLab y una
+deploy key con escritura en GitHub; no contiene un token personal. Sincroniza
+ramas protegidas y conserva referencias divergentes para no sobrescribirlas.
+Los tags de release `v*` están protegidos para mantenedores. Los dos historiales
+iniciales se integraron sin force push. Mantener una sola autoridad para ramas
+y tags; no almacenar credenciales en el código ni en los proyectos generados.
 
 ## Desarrollo
 

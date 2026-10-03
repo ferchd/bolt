@@ -5,7 +5,7 @@ Todos los cambios relevantes de Bolt se documentarán en este archivo.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/)
 y el proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
 
-## [Sin publicar]
+## [0.1.0] - 2026-10-03
 
 ### Añadido
 
@@ -30,7 +30,7 @@ y el proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
   y actualización versionada de archivos.
 - Se añadió configuración de estructura y plantillas para el scaffold,
   generación de entidades, vistas previas y conexiones de migración nombradas.
-- Se preparó `0.1.0` para GitLab Package Registry, con validación de metadatos,
+- Se incorporó distribución en GitLab Package Registry, con validación de metadatos,
   pipeline de integración SQL y publicación manual mediante tags protegidos.
 - Se incorporó `@bolt/cli` con comandos de desarrollo, arranque, pruebas,
   listado de rutas, migración, estado de migraciones y generadores seguros de
@@ -113,8 +113,8 @@ y el proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
 ### Cambiado
 
 - El scaffold predeterminado ahora es mínimo y deja la persistencia como opción.
-- Los paquetes son publicables en GitLab y declaran versiones coherentes;
-  todavía no se ha publicado una release.
+- Los 15 paquetes declaran versiones coherentes y un registry GitLab canónico;
+  GitHub recibe el mirror de ramas protegidas y tags de release.
 - El contenedor admite scopes por petición, conservados durante streaming;
   los singleton no pueden capturar recursos scoped.
 - Las migraciones adquieren una transacción `IMMEDIATE` antes de descubrir el
@@ -146,6 +146,10 @@ y el proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
 
 ### Corregido
 
+- La conexión MySQL afectada por autenticación RSA de Bun requiere TLS sin
+  modificar contraseñas; CI verifica el cifrado real de la sesión.
+- Oracle conserva Unicode y valores exactos con precisión explícita; el driver
+  rechaza resultados numéricos ambiguos y preserva salidas temporales nativas.
 - Las rutas registradas en `boot` se incorporan antes de iniciar HTTP.
 - Las migraciones del CLI esperan operaciones asíncronas antes del cierre.
 - La creación de SQLite con un nombre relativo evita intentar recrear `.` en Windows.

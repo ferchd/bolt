@@ -9,6 +9,11 @@ almacenamiento durable, 64 altas en lotes concurrentes y dos escritores que
 compiten por la misma versión. Estas comprobaciones prueban comportamientos
 concretos; no constituyen un benchmark de carga sostenida.
 
+La ejecución final contra los seis motores y Floci aprobó 286 pruebas, con
+1317 assertions y cero fallos. Se omitió una prueba de DDL implícitamente
+confirmado porque ese comportamiento no corresponde a PostgreSQL. La
+comprobación TypeScript pasó en los 19 workspaces.
+
 | Proveedor | Evidencia |
 | --- | --- |
 | SQLite | SQL real, rollback, scopes HTTP, joins, agregados, codecs y unidad de trabajo |
@@ -16,7 +21,7 @@ concretos; no constituyen un benchmark de carga sostenida.
 | MySQL 8.4.5 | Servidor real, DDL no transaccional, migraciones concurrentes, ORM y sesiones; caída y recuperación |
 | MariaDB 11.4.5 | Servidor real, `RETURNING`, migraciones concurrentes, ORM y sesiones; caída y recuperación |
 | SQL Server 2022 CU20 | ODBC nativo en PowerShell 5.1/7.6.5; precisión decimal/bigint, GUID, triggers, claves compuestas, rollback y sesiones |
-| Oracle Free 26ai 23.26.3 | Validación en curso; consultar la guía ODBC antes de elegir el proveedor |
+| Oracle Free 26ai 23.26.3 | Instant Client 23.26.3 y PowerShell 5.1 reales: Unicode, valores exactos, output binds, claves generadas múltiples, triggers, transacciones, locks de migración y sesiones |
 | S3 / Floci 1.5.8 | PUT/GET/copia, multipart, cancelación, error del stream y ausencia de cargas abandonadas |
 
 Floci se ejecuta sin autenticación. Una suite independiente verifica SigV4
@@ -31,6 +36,18 @@ timeouts, caídas del worker y reposición de conexiones. La matriz anterior no
 certifica ODBC en Linux ni todas las versiones de los servidores. El harness
 de Oracle extrae un RPM oficial verificado en un contenedor de compatibilidad;
 los despliegues deben seguir las plataformas soportadas por Oracle.
+
+Oracle requiere precisión explícita `NUMBER(p,s)` para resultados numéricos
+exactos; `NUMBER`/`FLOAT` sin precisión que el driver describe como double se
+rechaza con `unsupported_numeric_precision`. También puede seleccionarse
+`TO_CHAR` para texto exacto. El ORM tipa conteos y booleanos explícitamente;
+su aritmética, `sum` y `avg` tienen el contrato JavaScript `number`.
+
+MySQL también se validó con una contraseña de 21 bytes y TLS obligatorio,
+comprobando un `Ssl_cipher` de sesión no vacío. Esto evita la limitación RSA
+sin TLS de Bun 1.4; el desarrollo sin TLS recibe un error accionable cuando
+opta por recuperación de claves públicas con una contraseña afectada. No se
+truncan credenciales. Los despliegues deben verificar el certificado y hostname.
 
 `SqlPostCommitError.committed` distingue un commit confirmado seguido de un
 fallo de limpieza. El ORM reconcilia los valores persistidos y el ejemplo
@@ -61,6 +78,8 @@ bun run release:check
 bun run verify:recovery
 # Después de publicar; BOLT_GITLAB_TOKEN se obtiene fuera del repositorio:
 bun run verify:registry
+# Con las variables del servidor PostgreSQL y del almacenamiento S3 de pruebas:
+bun run verify:registry --services
 ```
 
 Las suites contra servicios externos se habilitan con las variables documentadas

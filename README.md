@@ -14,10 +14,10 @@ reemplazarlos cuando la aplicación realmente lo necesita.
 | PostgreSQL 16.9 | Bun SQL nativo | Integración contra servidor real |
 | MySQL 8.4.5 / MariaDB 11.4.5 | Bun SQL nativo | Integración contra servidores reales |
 | SQL Server 2022 CU20 | ODBC propio | Integración real: parámetros, migraciones, transacciones y ORM |
-| Oracle Free 26ai 23.26.3 | ODBC propio y driver nativo Oracle | Instalación disponible; validación del servidor en curso |
+| Oracle Free 26ai 23.26.3 | ODBC propio e Instant Client 23.26.3 | Integración real: Unicode, valores exactos, migraciones, transacciones y ORM |
 | Disco local | Adaptador propio | I/O, streaming, cancelación y publicación atómica reales |
 | S3 compatible | Transporte propio SigV4; Bun S3 para operaciones auxiliares | Floci 1.5.8 real: multipart, firmas, cancelación y limpieza |
-| Autenticación y permisos | Sesiones SQL, Argon2id y políticas explícitas | HTTP, CSRF, rotación, revocación y ledger en SQLite/PG/MySQL/MariaDB/SQL Server |
+| Autenticación y permisos | Sesiones SQL, Argon2id y políticas explícitas | HTTP, CSRF, rotación, revocación y ledger en los seis motores SQL |
 
 Los requisitos y límites del transporte ODBC se explican en
 [su guía](packages/database-odbc/README.md). Que un dialecto compile no implica
@@ -511,12 +511,13 @@ servidor y permite configurar TLS, `reusePort`, IPv6 e idle timeout mediante
 
 ## Estado y distribución
 
-La versión preparada es `0.1.0`, todavía sin publicar. El origen canónico y el
+La versión inicial es `0.1.0`. El origen canónico y el
 registry de paquetes son [GitLab](https://gitlab.com/ferchd/bolt). El registry
 usa el protocolo npm en GitLab; no se publican paquetes en npmjs.org.
 [GitHub](https://github.com/ferchd/bolt) queda destinado a contribuciones y
-mirror. La configuración del mirror remoto y la sincronización de este checkout
-siguen siendo operaciones pendientes; véase [CONTRIBUTING.md](CONTRIBUTING.md).
+mirror. El espejo push de GitLab está habilitado mediante una clave SSH de
+despliegue para ramas protegidas y tags; ambos historiales iniciales se conservaron
+y se comprobó que `main` coincide. Véase [CONTRIBUTING.md](CONTRIBUTING.md).
 
 El pipeline GitLab verifica tipos, pruebas, tarballs y motores SQL. El job de
 publicación es manual, requiere un tag protegido coincidente y valida que las
