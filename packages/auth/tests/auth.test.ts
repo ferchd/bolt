@@ -1,0 +1,150 @@
+import { afterEach, expect, test } from "bun:test";
+import { SqlDatabase, SqlMigrator } from "@bolt/database";
+import { HttpContext } from "@bolt/http";
+import { hashPassword } from "@bolt/security";
+import { Gate, SessionAuth, SqlSessionStore } from "../src/index.ts";
+
+const databases: SqlDatabase[] = [];
+afterEach(async () => { for (const database of databases.splice(0)) await database.close(); });
+function context(token?: string): HttpContext {
+  return new HttpContext(new Request("https://bolt.test/", { headers: token ? { cookie: `__Host-bolt_session=${token}` } : {} }), { route: { method: "GET", path: "/" } });
+}
+async function fixture() {
+  const database = SqlDatabase.create({ dialect: "sqlite", filename: ":memory:" });
+  databases.push(database);
+  await database.start();
+  const store = new SqlSessionStore(database);
+  await new SqlMigrator(database, [store.migration()]).migrate();
+  const passwordHash = await hashPassword("correct-password", { memoryCost: 8192, timeCost: 1 });
+  let active = true;
+  let now = 1000;
+  const user = { id: "user-a", tenant: "tenant-a" };
+  const auth = new SessionAuth({ findById: async id => active && id === user.id ? user : null, findByLogin: async login => login === "alice" ? { user, passwordHash } : null }, store, { ttlSeconds: 60, now: () => now });
+  return { database, store, auth, user, disable: () => { active = false; }, time: (value: number) => { now = value; } };
+}
+test("opaque sessions persist only digests, expire, and resolve current user status", async () => {
+  const f = await fixture();
+  const login = context();
+  expect(await f.auth.login(login, "alice", "correct-password")).toEqual(f.user);
+  const token = login.cookies.get("__Host-bolt_session")!;
+  expect(token).toMatch(/^[A-Za-z0-9_-]{43}$/);
+  expect(login.cookies.toSetCookieHeaders()[0]).toContain("HttpOnly");
+  expect(login.cookies.toSetCookieHeaders()[0]).toContain("Secure");
+  expect(login.cookies.toSetCookieHeaders()[0]).toContain("SameSite=Strict");
+  const result = await f.database.execute('SELECT "token_hash" FROM "bolt_auth_sessions"');
+  expect(result.rows[0]?.["token_hash"]).not.toEqual(token);
+  expect(String(result.rows[0]?.["token_hash"])).toHaveLength(64);
+  expect(await f.auth.require(context(token))).toEqual(f.user);
+  f.disable();
+  expect(await f.auth.user(context(token))).toBeNull();
+  f.time(61000);
+  expect(await f.auth.user(context(token))).toBeNull();
+  await f.store.purge(61000);
+  expect((await f.database.execute('SELECT * FROM "bolt_auth_sessions"')).rows).toHaveLength(0);
+});
+test("login replaces previous session and invalid credentials never issue a cookie", async () => {
+  const f = await fixture();
+  const first = context();
+  await f.auth.login(first, "alice", "correct-password");
+  const previous = first.cookies.get("__Host-bolt_session")!;
+  const second = context(previous);
+  await f.auth.login(second, "alice", "correct-password");
+  expect(await f.auth.user(context(previous))).toBeNull();
+  expect(await f.auth.user(context(second.cookies.get("__Host-bolt_session")!))).toEqual(f.user);
+  const failed = context();
+  await expect(f.auth.login(failed, "alice", "wrong")).rejects.toMatchObject({ status: 401 });
+  await expect(f.auth.login(failed, "missing", "wrong")).rejects.toMatchObject({ status: 401 });
+  expect(failed.cookies.get("__Host-bolt_session")).toBeNull();
+});
+test("concurrent rotation has one winner, preserves expiry and revoked tokens fail", async () => {
+  const f = await fixture();
+  const login = context();
+  await f.auth.login(login, "alice", "correct-password");
+  const old = login.cookies.get("__Host-bolt_session")!;
+  f.time(30000);
+  const contenders = [context(old), context(old)];
+  const results = await Promise.allSettled(contenders.map(value => f.auth.rotate(value)));
+  expect(results.filter(value => value.status === "fulfilled")).toHaveLength(1);
+  expect(await f.auth.user(context(old))).toBeNull();
+  const winner = contenders[results.findIndex(value => value.status === "fulfilled")]!;
+  const next = winner.cookies.get("__Host-bolt_session")!;
+  expect(await f.auth.require(context(next))).toEqual(f.user);
+  await f.store.revokeUser(f.user.id);
+  await expect(f.auth.require(context(next))).rejects.toMatchObject({ status: 401 });
+  await f.auth.logout(context(next));
+  f.time(61000);
+  expect(await f.auth.user(context(next))).toBeNull();
+});
+test("rotation rolls back deletion if insertion fails", async () => {
+  const f = await fixture();
+  const first = { tokenHash: "a".repeat(64), userId: f.user.id, expiresAt: 61000 };
+  const occupied = { ...first, tokenHash: "b".repeat(64) };
+  await f.store.create(first);
+  await f.store.create(occupied);
+  await expect(f.store.rotate(first.tokenHash, occupied, 1000)).rejects.toThrow();
+  expect(await f.store.find(first.tokenHash, 1000)).toEqual(first);
+  await expect(f.store.create(occupied, first.tokenHash)).rejects.toThrow();
+  expect(await f.store.find(first.tokenHash, 1000)).toEqual(first);
+});
+test("failed login replacement and rotation preserve the original session without issuing cookies", async () => {
+  const f = await fixture();
+  const login = context();
+  await f.auth.login(login, "alice", "correct-password");
+  const original = login.cookies.get("__Host-bolt_session")!;
+  await f.database.execute('CREATE TRIGGER reject_session_insert BEFORE INSERT ON "bolt_auth_sessions" BEGIN SELECT RAISE(ABORT, \'test insertion failure\'); END');
+  const replacement = context(original);
+  await expect(f.auth.login(replacement, "alice", "correct-password")).rejects.toThrow();
+  expect(replacement.cookies.toSetCookieHeaders()).toHaveLength(0);
+  expect(await f.auth.require(context(original))).toEqual(f.user);
+  const rotation = context(original);
+  await expect(f.auth.rotate(rotation)).rejects.toThrow();
+  expect(rotation.cookies.toSetCookieHeaders()).toHaveLength(0);
+  expect(await f.auth.require(context(original))).toEqual(f.user);
+});
+test("absolute expiry rejects active users and rotation never extends it", async () => {
+  const f = await fixture();
+  const login = context();
+  await f.auth.login(login, "alice", "correct-password");
+  const original = login.cookies.get("__Host-bolt_session")!;
+  f.time(60000);
+  const renewal = context(original);
+  await f.auth.rotate(renewal);
+  const renewed = renewal.cookies.get("__Host-bolt_session")!;
+  expect(await f.auth.user(context(renewed))).toEqual(f.user);
+  f.time(61000);
+  expect(await f.auth.user(context(renewed))).toBeNull();
+  await expect(f.auth.rotate(context(renewed))).rejects.toMatchObject({ status: 401 });
+  expect((await f.database.execute('SELECT "expires_at" FROM "bolt_auth_sessions"')).rows[0]?.["expires_at"]).toBe(61000);
+});
+test("custom tables sharing a long prefix have independent migration indexes", async () => {
+  const database = SqlDatabase.create({ dialect: "sqlite", filename: ":memory:" });
+  databases.push(database);
+  await database.start();
+  const first = new SqlSessionStore(database, "bolt_auth_shared_prefix_alpha");
+  const second = new SqlSessionStore(database, "bolt_auth_shared_prefix_beta");
+  await new SqlMigrator(database, [first.migration("001_first"), second.migration("002_second")]).migrate();
+  const record = { tokenHash: "a".repeat(64), userId: "日本-😀", expiresAt: 10000 };
+  await first.create(record);
+  await second.create(record);
+  expect(await first.find(record.tokenHash, 0)).toEqual(record);
+  expect(await second.find(record.tokenHash, 0)).toEqual(record);
+});
+test("invalid records fail before SQL and malformed cookies never query the store", async () => {
+  const f = await fixture();
+  const record = { tokenHash: "a".repeat(64), userId: f.user.id, expiresAt: 10000 };
+  await expect(f.store.create({ ...record, tokenHash: "raw-token" })).rejects.toThrow("digest");
+  await expect(f.store.create({ ...record, userId: "" })).rejects.toThrow("user ID");
+  await expect(f.store.create({ ...record, expiresAt: Number.NaN })).rejects.toThrow("expiry");
+  await expect(f.store.create({ ...record, expiresAt: 0.5 })).rejects.toThrow("expiry");
+  expect((await f.database.execute('SELECT * FROM "bolt_auth_sessions"')).rows).toHaveLength(0);
+  f.store.find = async () => { throw new Error("store must not be queried"); };
+  expect(await f.auth.user(context("not-a-valid-token"))).toBeNull();
+});
+test("policies deny cross-tenant resources and require explicit boolean approval", async () => {
+  const gate = new Gate<{ tenant: string }>();
+  const policy = (user: { tenant: string }, resource: { tenant: string }) => user.tenant === resource.tenant;
+  await gate.authorize({ tenant: "a" }, { tenant: "a" }, policy);
+  await expect(gate.authorize({ tenant: "a" }, { tenant: "b" }, policy)).rejects.toMatchObject({ status: 403 });
+  expect(await gate.allows({ tenant: "a" }, {}, async () => false)).toBe(false);
+  expect(await gate.allows({ tenant: "a" }, {}, async () => "allowed" as unknown as boolean)).toBe(false);
+});
