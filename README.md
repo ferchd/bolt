@@ -107,6 +107,17 @@ transforma esa tabla en las rutas nativas de Bun al iniciar la aplicación.
 
 Puedes ejecutar el ejemplo con `bun run example:routing`.
 
+Los directorios estáticos se delegan al router nativo de Bun:
+
+```ts
+import { resolve } from "node:path";
+
+router.static("/assets", resolve(import.meta.dir, "../public"));
+```
+
+Bolt normaliza la ruta como `/assets/*`; Bun se encarga de MIME types, rangos,
+cache condicional, streaming y protección frente a escapes del directorio.
+
 ## Contexto y errores HTTP
 
 Los handlers reciben un contexto inferido por TypeScript con acceso a la

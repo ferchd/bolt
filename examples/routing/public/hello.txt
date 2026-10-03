@@ -1,0 +1,1 @@
+Hello from Bolt static files.

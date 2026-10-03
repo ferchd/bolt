@@ -10,8 +10,11 @@ export { RouteGroup } from "./route-group.ts";
 
 export { Router } from "./router.ts";
 
+export { StaticRoute } from "./static-route.ts";
+
 export type {
   CompiledRoute,
+  CompiledPath,
   ControllerHandler,
   ControllerReference,
   ControllerType,

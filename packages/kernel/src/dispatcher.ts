@@ -19,21 +19,29 @@ type BunRouteHandler = (request: Request) => Promise<Response>;
 
 type BunRouteTable = Record<
   string,
-  Partial<Record<RouteMethod, BunRouteHandler>>
+  | { readonly dir: string }
+  | Partial<Record<RouteMethod, BunRouteHandler>>
 >;
 
 export function compileBunRoutes(routes: RouteTable): BunRouteTable {
   const compiled: BunRouteTable = {};
 
   for (const [path, methods] of Object.entries(routes)) {
+    if (methods.directory) {
+      compiled[path] = { dir: methods.directory };
+      continue;
+    }
+
     const compiledMethods: Partial<Record<RouteMethod, BunRouteHandler>> = {};
 
     for (const [method, route] of Object.entries(methods)) {
-      if (!route) {
+      if (method === "directory" || !route) {
         continue;
       }
 
-      compiledMethods[method as RouteMethod] = createBunHandler(route);
+      compiledMethods[method as RouteMethod] = createBunHandler(
+        route as CompiledRoute,
+      );
     }
 
     compiled[path] = compiledMethods;

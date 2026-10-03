@@ -43,6 +43,12 @@ export interface CompiledRoute {
   readonly middleware: readonly RouteMiddleware[];
 }
 
+export type CompiledPath = Readonly<
+  Partial<Record<RouteMethod, CompiledRoute>> & {
+    readonly directory?: string;
+  }
+>;
+
 export type RouteTable = Readonly<
-  Record<string, Readonly<Partial<Record<RouteMethod, CompiledRoute>>>>
+  Record<string, CompiledPath>
 >;

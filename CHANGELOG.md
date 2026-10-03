@@ -36,6 +36,8 @@ y el proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
 - Se añadieron rutas para los métodos HTTP comunes y handlers inline o basados
   en controladores.
 - Se añadieron grupos anidados con prefijos, nombres y middleware compartido.
+- Se añadió `router.static()` para servir directorios mediante las rutas
+  nativas y seguras de Bun.
 - Se añadió la compilación de definiciones en una tabla por path y método para
   mantener el router separado del runtime HTTP.
 - Se añadió detección temprana de paths y nombres de ruta duplicados.

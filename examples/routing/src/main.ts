@@ -1,6 +1,10 @@
+import { resolve } from "node:path";
+
 import env from "@bolt/config";
 import { abort, BoltApplication } from "@bolt/kernel";
 import router from "@bolt/router";
+
+router.static("/assets", resolve(import.meta.dir, "../public"));
 
 router.get("/", (context) => {
   context.cookies.set("visited", "true");

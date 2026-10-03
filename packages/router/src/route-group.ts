@@ -1,7 +1,8 @@
 import { toMiddlewareArray, type Route } from "./route.ts";
+import type { StaticRoute } from "./static-route.ts";
 import type { RouteMiddleware } from "./types.ts";
 
-export type RoutableNode = Route | RouteGroup;
+export type RoutableNode = Route | RouteGroup | StaticRoute;
 
 export class RouteGroup {
   #pathPrefix = "";

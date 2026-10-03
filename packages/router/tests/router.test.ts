@@ -107,6 +107,33 @@ describe("Router", () => {
     expect(route?.middleware).toEqual([middleware]);
   });
 
+  test("compiles static directories into wildcard paths", () => {
+    const router = Router.create();
+
+    router
+      .group(() => {
+        router.static("assets", "./public");
+      })
+      .prefix("web");
+
+    expect(router.compile()["/web/assets/*"]?.directory).toBe("./public");
+  });
+
+  test("rejects empty static directories and duplicate paths", () => {
+    const router = Router.create();
+
+    expect(() => router.static("assets", " ")).toThrow(
+      "Static route directory cannot be empty",
+    );
+
+    router.static("assets", "./public");
+    router.get("assets/*", () => "fallback");
+
+    expect(() => router.compile()).toThrow(
+      "Duplicate route path: /assets/*",
+    );
+  });
+
   test("rejects duplicate methods for the same path", () => {
     const router = Router.create();
 
