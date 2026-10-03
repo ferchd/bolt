@@ -8,6 +8,7 @@ export { Database } from "./database.ts";
 
 export type {
   DatabaseOptions,
+  DatabaseStartOptions,
   DatabaseState,
   DatabaseTransaction,
   Migration,

@@ -166,6 +166,35 @@ describe("Database", () => {
     }
   });
 
+  test("can override automatic migrations for a single start", () => {
+    const database = Database.create({
+      filename: ":memory:",
+      migrations: [
+        {
+          id: "001_create_users",
+          up(database) {
+            database.run("CREATE TABLE users (id INTEGER PRIMARY KEY)");
+          },
+        },
+      ],
+    });
+
+    try {
+      database.start({ migrate: false });
+
+      expect(database.migrationStatus()).toEqual([
+        {
+          appliedAt: null,
+          id: "001_create_users",
+          state: "pending",
+        },
+      ]);
+      expect(() => database.run("SELECT * FROM users")).toThrow();
+    } finally {
+      database.stop();
+    }
+  });
+
   test("reports migration records missing from the current registry", () => {
     const database = Database.create({
       filename: ":memory:",

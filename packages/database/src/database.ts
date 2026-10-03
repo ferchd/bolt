@@ -36,6 +36,10 @@ export interface DatabaseOptions {
   readonly wal?: boolean;
 }
 
+export interface DatabaseStartOptions {
+  readonly migrate?: boolean;
+}
+
 export interface DatabaseTransaction<
   Arguments extends unknown[],
   Result,
@@ -207,7 +211,7 @@ export class Database {
     return this.getConnection().run<Parameters>(sql, ...bindings);
   }
 
-  public start(): void {
+  public start(options: DatabaseStartOptions = {}): void {
     if (this.#state === "running") {
       return;
     }
@@ -227,7 +231,7 @@ export class Database {
     try {
       configureConnection(connection, this.#options);
 
-      if (this.#options.migrateOnStart) {
+      if (options.migrate ?? this.#options.migrateOnStart) {
         this.migrate();
       }
     } catch (error) {
