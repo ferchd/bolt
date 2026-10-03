@@ -126,9 +126,14 @@ export class CancellableS3Uploader {
           return;
         }
         if (!uploadId) {
-          const response = await this.#request(key, "POST", { uploads: "" }, new Uint8Array(), signal, options.contentType);
+          signal.throwIfAborted();
+          // Creation is not idempotent: recover the owned UploadId even if the caller
+          // cancels while the service is responding, then abort that exact session.
+          // Bound both headers and body with a separate deadline; never retry creation.
+          const response = await this.#request(key, "POST", { uploads: "" }, new Uint8Array(), AbortSignal.timeout(10_000), options.contentType);
           uploadId = xmlValue(await responseText(response), "UploadId");
           if (!uploadId) throw new StorageError("S3 did not return a multipart upload ID", "PROVIDER_ERROR");
+          signal.throwIfAborted();
         }
         const number = parts.length + 1;
         if (number > 10_000) throw new StorageError("S3 multipart upload exceeds 10000 parts", "LIMIT_EXCEEDED");

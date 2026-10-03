@@ -178,22 +178,56 @@ test("original cancelable multipart signs actual requests, includes session toke
   expect(uploads.size).toBe(0);
   expect(requests.every(request => request.valid)).toBe(true);
 });
-test("cancelable upload stops pending input and aborts its multipart session", async () => {
-  const { disk, objects, uploads } = fixture();
+test("cancellation during initiation recovers the owned upload ID before cleaning its session", async () => {
+  const initiated = Promise.withResolvers<void>();
+  let respond!: () => void;
+  let activeUploads = 0;
+  let cleanup = false;
+  let parts = 0;
+  const server = createServer((request, response) => {
+    request.resume();
+    const url = new URL(request.url!, "http://localhost");
+    if (request.method === "POST" && url.searchParams.has("uploads")) {
+      activeUploads++;
+      response.setHeader("content-type", "application/xml");
+      respond = () => response.end("<InitiateMultipartUploadResult><UploadId>owned-upload</UploadId></InitiateMultipartUploadResult>");
+      initiated.resolve();
+    } else if (request.method === "DELETE" && url.searchParams.get("uploadId") === "owned-upload") {
+      activeUploads--; cleanup = true; response.writeHead(204); response.end();
+    } else {
+      if (request.method === "PUT") parts++;
+      response.writeHead(405); response.end();
+    }
+  });
+  httpServers.push(server);
+  await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address();
+  if (!address || typeof address === "string") throw new Error("Missing test port");
+  const disk = new S3Storage({ bucket: "bucket", endpoint: `http://127.0.0.1:${address.port}`, accessKeyId: keyId, secretAccessKey: secret });
   const abort = new AbortController();
-  let cancelled = false;
+  const inputCancelled = Promise.withResolvers<void>();
   const body = new ReadableStream<Uint8Array>({
     start(controller) { controller.enqueue(new Uint8Array(5 * 1024 * 1024)); },
-    cancel() { cancelled = true; },
+    cancel() { inputCancelled.resolve(); },
   });
-  const write = disk.write("cancel-input", body, { signal: abort.signal });
-  for (let retry = 0; retry < 100 && uploads.size === 0; retry++) await new Promise(resolve => setTimeout(resolve, 5));
-  expect(uploads.size).toBe(1);
-  abort.abort(new Error("cancel input"));
-  await expect(write).rejects.toThrow("cancel input");
-  expect(cancelled).toBe(true);
-  expect(uploads.size).toBe(0);
-  expect(objects.has("cancel-input")).toBe(false);
+  const writing = disk.write("unknown-id", body, { signal: abort.signal });
+  let settled = false;
+  void writing.then(() => { settled = true; }, () => { settled = true; });
+  try {
+    // The service has created a session but deliberately withholds its UploadId response.
+    await initiated.promise;
+    abort.abort(new Error("cancel initiation"));
+    // Input cancellation is immediate, but the owned initiation handshake is bounded
+    // independently so its response can be recovered and its exact session deleted.
+    await inputCancelled.promise;
+    expect(settled).toBe(false);
+    expect(activeUploads).toBe(1);
+    respond();
+    await expect(writing).rejects.toThrow("cancel initiation");
+    expect(activeUploads).toBe(0);
+    expect(parts).toBe(0);
+    expect(cleanup).toBe(true);
+  } finally { respond(); }
 });
 test("cancelable multipart rejects HTTP 200 error documents and exposes cleanup failures", async () => {
   const failed = fixture({ failCompletion: true });
@@ -212,10 +246,11 @@ test("transient part failures retry idempotently without duplicating published c
   expect(requests.filter(request => request.method === "PUT")).toHaveLength(3);
   expect(requests.every(request => request.valid)).toBe(true);
 });
-test("AbortSignal interrupts an active HTTP upload transport and sends a separate multipart cleanup request", async () => {
+test("cancelable upload interrupts active part transport, stops pending input and aborts its known multipart session", async () => {
   const abort = new AbortController();
   let transportClosed = false;
   let cleanup = false;
+  let inputCancelled = false;
   let signalClosed!: () => void;
   const closed = new Promise<void>(resolve => { signalClosed = resolve; });
   const server = createServer((request, response) => {
@@ -228,7 +263,8 @@ test("AbortSignal interrupts an active HTTP upload transport and sends a separat
       // Stop reading so a 5 MiB part cannot finish before abort; observe socket teardown.
       request.pause();
       request.once("aborted", () => { transportClosed = true; signalClosed(); });
-      setTimeout(() => abort.abort(new Error("cancel active transport")), 20);
+      // Receiving UploadPart proves Bolt already acquired its owned UploadId.
+      abort.abort(new Error("cancel active transport"));
     } else if (request.method === "DELETE" && url.searchParams.has("uploadId")) {
       cleanup = true; response.writeHead(204); response.end();
     }
@@ -238,8 +274,13 @@ test("AbortSignal interrupts an active HTTP upload transport and sends a separat
   const address = server.address();
   if (!address || typeof address === "string") throw new Error("Missing test port");
   const disk = new S3Storage({ bucket: "bucket", endpoint: `http://127.0.0.1:${address.port}`, accessKeyId: keyId, secretAccessKey: secret });
-  await expect(disk.write("transport", new Blob([new Uint8Array(12 * 1024 * 1024)]), { signal: abort.signal })).rejects.toThrow("cancel active transport");
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) { controller.enqueue(new Uint8Array(5 * 1024 * 1024)); },
+    cancel() { inputCancelled = true; },
+  });
+  await expect(disk.write("transport", body, { signal: abort.signal })).rejects.toThrow("cancel active transport");
   await Promise.race([closed, new Promise((_, reject) => setTimeout(() => reject(new Error("Upload socket did not close")), 2000))]);
   expect(transportClosed).toBe(true);
+  expect(inputCancelled).toBe(true);
   expect(cleanup).toBe(true);
 });
