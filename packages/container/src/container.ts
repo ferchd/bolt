@@ -25,6 +25,8 @@ type AnyProvider = Provider<any, any>;
 
 export class Container {
   readonly #providers = new Map<Token<unknown>, AnyProvider>();
+  readonly #children = new Set<Container>();
+  readonly #parent?: Container;
   readonly #resolutionStack: Token<unknown>[] = [];
   readonly #resources: ContainerResource[] = [];
   readonly #singletons = new Map<Token<unknown>, unknown>();
@@ -32,7 +34,9 @@ export class Container {
   #disposePromise?: Promise<void>;
   #state: ContainerState = "active";
 
-  private constructor() {}
+  private constructor(parent?: Container) {
+    this.#parent = parent;
+  }
 
   public static create(...providers: readonly AnyProvider[]): Container {
     return new Container().register(...providers);
@@ -43,7 +47,15 @@ export class Container {
   }
 
   public has(token: Token<unknown>): boolean {
-    return this.#providers.has(token);
+    return this.#providers.has(token) || (this.#parent?.has(token) ?? false);
+  }
+
+  /** A scope owns scoped and transient resources, while sharing parent singletons. */
+  public createScope(...providers: readonly AnyProvider[]): Container {
+    this.assertActive("create scopes");
+    const scope = new Container(this).register(...providers);
+    this.#children.add(scope);
+    return scope;
   }
 
   public register(...providers: readonly AnyProvider[]): this {
@@ -75,10 +87,19 @@ export class Container {
       return this.#singletons.get(token) as Value;
     }
 
-    const provider = this.#providers.get(token) as AnyProvider | undefined;
+    const owner = this.providerOwner(token);
+    const provider = (owner ? owner.#providers.get(token) : undefined) as AnyProvider | undefined;
 
     if (!provider) {
       throw new ProviderNotFoundError(token);
+    }
+
+    if (owner !== this && (provider.kind === "value" || provider.lifetime === "singleton")) {
+      return owner!.resolve(token);
+    }
+
+    if (provider.kind !== "value" && provider.lifetime === "scoped" && !this.#parent) {
+      throw new Error(`Scoped provider ${token.description} requires a container scope`);
     }
 
     const cycleStart = this.#resolutionStack.indexOf(token);
@@ -95,7 +116,7 @@ export class Container {
     try {
       const value = this.instantiate<Value>(provider);
 
-      if (provider.kind === "value" || provider.lifetime === "singleton") {
+      if (provider.kind === "value" || provider.lifetime === "singleton" || provider.lifetime === "scoped") {
         this.#singletons.set(token, value);
       }
 
@@ -130,10 +151,23 @@ export class Container {
     }
   }
 
+  private providerOwner(token: Token<unknown>): Container | undefined {
+    this.assertActive("resolve dependencies");
+    return this.#providers.has(token) ? this : this.#parent?.providerOwner(token);
+  }
+
   private async disposeResources(): Promise<void> {
     const errors: unknown[] = [];
 
     try {
+      for (const child of [...this.#children].reverse()) {
+        try {
+          await child.dispose();
+        } catch (error) {
+          errors.push(error);
+        }
+      }
+      this.#children.clear();
       for (let index = this.#resources.length - 1; index >= 0; index -= 1) {
         const resource = this.#resources[index];
 
@@ -157,6 +191,7 @@ export class Container {
       this.#resources.length = 0;
       this.#singletons.clear();
       this.#state = "disposed";
+      if (this.#parent) this.#parent.#children.delete(this);
     }
 
     if (errors.length > 0) {

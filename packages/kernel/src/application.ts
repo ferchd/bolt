@@ -181,16 +181,9 @@ export class BoltApplication {
     const started: ApplicationService[] = [];
 
     try {
-      const dispatcher = compileBunDispatcher(
-        (this.#options.router ?? router).compile(),
-        {
-          development: isDevelopment(this.#options.development),
-          hooks: this.#options.hooks,
-          logger: this.logger,
-          requests: this.#options.requests,
-          services: this.#container,
-        },
-      );
+      // Fail on existing route errors before opening application resources.
+      const applicationRouter = this.#options.router ?? router;
+      applicationRouter.compile();
       this.registerShutdownSignals();
 
       for (const service of this.#services) {
@@ -202,6 +195,14 @@ export class BoltApplication {
         await provider.boot?.(this);
         booted.push(provider);
       }
+
+      const dispatcher = compileBunDispatcher(applicationRouter.compile(), {
+        development: isDevelopment(this.#options.development),
+        hooks: this.#options.hooks,
+        logger: this.logger,
+        requests: this.#options.requests,
+        services: this.#container,
+      });
 
       this.#server = Bun.serve({
         development: this.#options.development,

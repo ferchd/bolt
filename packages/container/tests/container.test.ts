@@ -219,6 +219,74 @@ describe("Container", () => {
   });
 });
 
+describe("container scopes", () => {
+  test("isolates scoped resources and shares parent singletons", async () => {
+    const shared = createToken<object>("pool");
+    const session = createToken<{ dispose(): void }>("session");
+    let disposals = 0;
+    const root = Container.create(
+      provideFactory(shared, [], () => ({})),
+      provideFactory(session, [], () => ({ dispose() { disposals++; } }), { lifetime: "scoped" }),
+    );
+    expect(() => root.resolve(session)).toThrow("requires a container scope");
+    const first = root.createScope();
+    const second = root.createScope();
+    expect(first.has(session)).toBe(true);
+    expect(first.resolve(shared)).toBe(second.resolve(shared));
+    expect(first.resolve(session)).toBe(first.resolve(session));
+    expect(first.resolve(session)).not.toBe(second.resolve(session));
+    await first.dispose();
+    expect(disposals).toBe(1);
+    expect(second.state).toBe("active");
+    await root.dispose();
+    expect(disposals).toBe(2);
+    expect(second.state).toBe("disposed");
+  });
+
+  test("releases transient resources with their scope, preserving shared resources", async () => {
+    const events: string[] = [];
+    const pool = createToken<{ dispose(): void }>("shared pool");
+    const connection = createToken<{ dispose(): void }>("transient connection");
+    const root = Container.create(
+      provideFactory(pool, [], () => ({ dispose() { events.push("pool"); } })),
+      provideFactory(connection, [pool], () => ({ dispose() { events.push("connection"); } }), { lifetime: "transient" }),
+    );
+    const scope = root.createScope();
+    scope.resolve(connection);
+    scope.resolve(connection);
+    await scope.dispose();
+    expect(events).toEqual(["connection", "connection"]);
+    await root.dispose();
+    expect(events).toEqual(["connection", "connection", "pool"]);
+  });
+
+  test("prevents singleton factories from capturing scoped state", async () => {
+    const scoped = createToken<object>("scoped state");
+    const singleton = createToken<object>("singleton state");
+    const root = Container.create(
+      provideFactory(scoped, [], () => ({}), { lifetime: "scoped" }),
+      provideFactory(singleton, [scoped], value => value),
+    );
+    const scope = root.createScope();
+    expect(() => scope.resolve(singleton)).toThrow("requires a container scope");
+    await root.dispose();
+  });
+
+  test("cleans every scope even if one disposal fails", async () => {
+    const root = Container.create();
+    const token = createToken<{ dispose(): void }>("failing resource");
+    let disposed = 0;
+    const first = root.createScope(provideValue(token, { dispose() { disposed++; } }));
+    const second = root.createScope(provideValue(token, { dispose() { throw new Error("cleanup"); } }));
+    first.resolve(token);
+    second.resolve(token);
+    await expect(root.dispose()).rejects.toBeInstanceOf(AggregateError);
+    expect(disposed).toBe(1);
+    expect(first.state).toBe("disposed");
+    expect(second.state).toBe("disposed");
+  });
+});
+
 describe("tokens", () => {
   test("require meaningful descriptions", () => {
     expect(() => createToken("   ")).toThrow(

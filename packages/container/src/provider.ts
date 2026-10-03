@@ -1,6 +1,6 @@
 import type { Token } from "./token.ts";
 
-export type Lifetime = "singleton" | "transient";
+export type Lifetime = "singleton" | "scoped" | "transient";
 export type DependencyTokens = readonly Token<unknown>[];
 
 export type ResolvedDependencies<Dependencies extends DependencyTokens> = {
@@ -101,5 +101,8 @@ export function provideClass<
 }
 
 function resolveLifetime(lifetime: Lifetime | undefined): Lifetime {
+  if (lifetime !== undefined && !["singleton", "scoped", "transient"].includes(lifetime)) {
+    throw new TypeError("Provider lifetime must be singleton, scoped, or transient");
+  }
   return lifetime ?? "singleton";
 }

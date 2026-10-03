@@ -173,6 +173,22 @@ describe("BoltApplication", () => {
     expect(application.state).toBe("stopped");
   });
 
+  test("serves routes registered during provider boot", async () => {
+    const router = Router.create();
+    application = BoltApplication.create({
+      port: 0,
+      router,
+      providers: [{
+        register() {},
+        boot() { router.get("/provider", () => ({ booted: true })); },
+      }],
+    });
+    await application.start();
+    const response = await fetch(new URL("/provider", application.url));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ booted: true });
+  });
+
   test("validates routes before starting services", async () => {
     const router = Router.create();
     let serviceStarts = 0;

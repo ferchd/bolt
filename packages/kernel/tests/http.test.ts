@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import {
   createToken,
   provideClass,
+  provideFactory,
   provideValue,
 } from "@bolt/container";
 import { Router } from "@bolt/router";
@@ -19,6 +20,109 @@ describe("BoltApplication HTTP lifecycle", () => {
 
   afterEach(async () => {
     await application?.stop();
+  });
+
+  test("isolates request services and releases them on successful and failed requests", async () => {
+    const resource = createToken<{ id: number; dispose(): void }>("request session");
+    const disposed: number[] = [];
+    let created = 0;
+    const router = Router.create();
+    router.get("/scope", async context => {
+      const session = context.resolve(resource);
+      expect(context.resolve(resource)).toBe(session);
+      await Bun.sleep(2);
+      return { id: session.id };
+    });
+    router.get("/failure", context => {
+      context.resolve(resource);
+      throw new Error("expected failure");
+    });
+    application = BoltApplication.create({
+      port: 0,
+      router,
+      bindings: [provideFactory(resource, [], () => {
+        const id = ++created;
+        return { id, dispose() { disposed.push(id); } };
+      }, { lifetime: "scoped" })],
+    });
+    await application.start();
+    const responses = await Promise.all([1, 2].map(() => fetch(new URL("/scope", application!.url))));
+    const bodies = await Promise.all(responses.map(response => response.json()));
+    expect(new Set(bodies.map(body => body.id)).size).toBe(2);
+    const failure = await fetch(new URL("/failure", application.url));
+    expect(failure.status).toBe(500);
+    await failure.text();
+    expect(disposed.sort()).toEqual([1, 2, 3]);
+  });
+
+  test("keeps request resources alive until a streamed response finishes", async () => {
+    const token = createToken<{ dispose(): void }>("stream resource");
+    let disposed = false;
+    const router = Router.create();
+    router.get("/stream", context => {
+      context.resolve(token);
+      return new Response(new ReadableStream({
+        async start(controller) {
+          controller.enqueue(new TextEncoder().encode("first"));
+          await Bun.sleep(15);
+          expect(disposed).toBe(false);
+          controller.enqueue(new TextEncoder().encode("last"));
+          controller.close();
+        },
+      }));
+    });
+    application = BoltApplication.create({ port: 0, router, bindings: [
+      provideFactory(token, [], () => ({ dispose() { disposed = true; } }), { lifetime: "scoped" }),
+    ] });
+    await application.start();
+    const response = await fetch(new URL("/stream", application.url));
+    expect(await response.text()).toBe("firstlast");
+    expect(disposed).toBe(true);
+  });
+
+  test("releases scoped services after a client aborts streaming", async () => {
+    const token = createToken<{ dispose(): void }>("aborted stream resource");
+    let release!: () => void;
+    const disposed = new Promise<void>(resolve => { release = resolve; });
+    const router = Router.create();
+    router.get("/abort-stream", context => {
+      context.resolve(token);
+      return new Response(new ReadableStream({
+        start(controller) { controller.enqueue(new Uint8Array(8192)); },
+      }));
+    });
+    application = BoltApplication.create({ port: 0, router, bindings: [
+      provideFactory(token, [], () => ({ dispose() { release(); } }), { lifetime: "scoped" }),
+    ] });
+    await application.start();
+    const abort = new AbortController();
+    const response = await fetch(new URL("/abort-stream", application.url), { signal: abort.signal });
+    expect(response.status).toBe(200);
+    abort.abort();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await Promise.race([disposed, new Promise<void>((_, reject) => {
+        timer = setTimeout(() => reject(new Error("Aborted request leaked its scope")), 2000);
+      })]);
+    } finally { clearTimeout(timer); }
+  });
+
+  test("releases scoped services when HEAD suppresses a response body", async () => {
+    const token = createToken<{ dispose(): void }>("HEAD resource");
+    let disposed = false;
+    const router = Router.create();
+    router.head("/metadata", context => {
+      context.resolve(token);
+      return new Response("body excluded by HEAD");
+    });
+    application = BoltApplication.create({ port: 0, router, bindings: [
+      provideFactory(token, [], () => ({ dispose() { disposed = true; } }), { lifetime: "scoped" }),
+    ] });
+    await application.start();
+    const response = await fetch(new URL("/metadata", application.url), { method: "HEAD" });
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe("");
+    expect(disposed).toBe(true);
   });
 
   test("starts the server and serializes handler results", async () => {

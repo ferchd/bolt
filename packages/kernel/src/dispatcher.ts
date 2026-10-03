@@ -90,7 +90,7 @@ function createBunHandler(
   return async (request, server) => {
     return handleRequest(request, server, route, options, (context) =>
       runMiddleware(route.middleware, context, () =>
-        invokeRouteHandler(route, context, options.services),
+        invokeRouteHandler(route, context),
       ),
     );
   };
@@ -116,52 +116,119 @@ async function handleRequest(
   options: DispatcherOptions,
   execute: (context: HttpContext) => unknown,
 ): Promise<Response> {
-  const startedAt = performance.now();
-  const idHeader = options.requests?.idHeader ?? "x-request-id";
-  const requestId = resolveRequestId(request, idHeader);
-  const logger = options.logger.child({ requestId });
-  const context = new HttpContext(request, {
-    clientIp: resolveClientIp(
-      request,
-      server,
-      options.requests?.trustProxy ?? false,
-    ),
-    logger,
-    params: getRequestParams(request),
-    requestId,
-    route,
-    services: options.services,
-    timeout: (seconds) => server.timeout(request, seconds),
-  });
-  let response: Response;
-
+  const scope = options.services.createScope();
   try {
-    await options.hooks?.onRequest?.(context);
-    const result = await execute(context);
-    response = toResponse(result);
+    const startedAt = performance.now();
+    const idHeader = options.requests?.idHeader ?? "x-request-id";
+    const requestId = resolveRequestId(request, idHeader);
+    const logger = options.logger.child({ requestId });
+    const context = new HttpContext(request, {
+      clientIp: resolveClientIp(
+        request,
+        server,
+        options.requests?.trustProxy ?? false,
+      ),
+      logger,
+      params: getRequestParams(request),
+      requestId,
+      route,
+      services: scope,
+      timeout: (seconds) => server.timeout(request, seconds),
+    });
+    let response: Response;
+
+    try {
+      await options.hooks?.onRequest?.(context);
+      const result = await execute(context);
+      response = toResponse(result);
+    } catch (error) {
+      try {
+        await options.hooks?.onError?.(context, error);
+      } catch (hookError) {
+        logger.error("Request error hook failed", { error: hookError });
+      }
+      logRequestError(logger, error, route);
+      response = toErrorResponse(error, {
+        development: options.development,
+      });
+    }
+
+    response = attachRequestId(response, idHeader, requestId);
+    const durationMs = performance.now() - startedAt;
+    await options.hooks?.onResponse?.(context, response, durationMs);
+
+    if (options.requests?.accessLog ?? true) {
+      logger.info("Request completed", {
+        clientIp: context.clientIp,
+        durationMs: Number(durationMs.toFixed(3)),
+        method: request.method,
+        route: route.name ?? route.path,
+        status: response.status,
+      });
+    }
+
+    return await ownResponseScope(response, scope, request.signal);
   } catch (error) {
-    await options.hooks?.onError?.(context, error);
-    logRequestError(logger, error, route);
-    response = toErrorResponse(error, {
-      development: options.development,
-    });
+    try {
+      await scope.dispose();
+    } catch (cleanupError) {
+      throw new AggregateError([error, cleanupError], "Request and cleanup failed");
+    }
+    throw error;
   }
+}
 
-  response = attachRequestId(response, idHeader, requestId);
-  const durationMs = performance.now() - startedAt;
-  await options.hooks?.onResponse?.(context, response, durationMs);
-
-  if (options.requests?.accessLog ?? true) {
-    logger.info("Request completed", {
-      clientIp: context.clientIp,
-      durationMs: Number(durationMs.toFixed(3)),
-      method: request.method,
-      route: route.name ?? route.path,
-      status: response.status,
-    });
+async function ownResponseScope(
+  response: Response,
+  scope: Container,
+  signal: AbortSignal,
+): Promise<Response> {
+  if (!response.body || signal.aborted) {
+    await scope.dispose();
+    return response;
   }
-
-  return response;
+  const reader = response.body.getReader();
+  const finish = async () => {
+    signal.removeEventListener("abort", abort);
+    await scope.dispose();
+  };
+  const abort = () => {
+    // Cancellation cleanup must not become an unhandled rejection.
+    void reader.cancel(signal.reason).catch(() => undefined);
+    void finish().catch(() => undefined);
+  };
+  signal.addEventListener("abort", abort, { once: true });
+  const body = new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      try {
+        const result = await reader.read();
+        if (result.done) {
+          await finish();
+          controller.close();
+        } else {
+          controller.enqueue(result.value);
+        }
+      } catch (error) {
+        try {
+          await finish();
+        } finally {
+          controller.error(error);
+        }
+      }
+    },
+    async cancel(reason) {
+      try {
+        await reader.cancel(reason);
+      } finally {
+        await finish();
+      }
+    },
+  });
+  return new Response(body, {
+    headers: response.headers,
+    status: response.status,
+    statusText: response.statusText,
+  });
 }
 
 function attachRequestId(
@@ -280,7 +347,6 @@ function resolveMiddleware(middleware: RouteMiddleware): {
 async function invokeRouteHandler(
   route: CompiledRoute,
   context: HttpContext,
-  services: Container,
 ): Promise<unknown> {
   const handler = route.handler;
 
@@ -290,7 +356,7 @@ async function invokeRouteHandler(
 
   const [reference, action] = handler;
   const instance = isToken(reference)
-    ? services.resolve(reference)
+    ? context.resolve(reference)
     : Reflect.construct(await resolveController(reference), []);
   const method = Reflect.get(instance, action);
 
